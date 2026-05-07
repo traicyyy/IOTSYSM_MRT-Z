@@ -1,0 +1,11 @@
+{
+  "homepage": "https://github.com/traicyyy/IOTSYSM_MRT-Z",
+  "scripts": {
+    "build": "node build.js",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d ."
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  }
+}
