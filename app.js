@@ -12,6 +12,8 @@ class AgricultureDashboard {
         this.supabaseSubscription = null;
         this.sensorChart = null;
         this.chartData = { labels: [], tempData: [], humData: [] };
+        this.historyRows = [];
+        this.activeWindowMs = 5 * 60 * 1000;
 
         // Load configuration
         if (typeof config === 'undefined') {
@@ -256,11 +258,27 @@ class AgricultureDashboard {
     }
 
     // ── PARSE FEED NAME ────────────────────────────────────────────────────────
-    // Feed name format: "VLM-01-temperature" or "VLM-01-humidity"
+    // Feed name format can be:
+    // - "VLM-01-temperature"
+    // - "ndato/feeds/san-lorenzo-temp"
     parseFeedName(feedName) {
-        const parts = feedName.split('-');
-        const nodeId = parts.slice(0, 2).join('-'); // "VLM-01"
-        const type = parts.slice(2).join('-');      // "temperature" or "humidity"
+        const normalized = String(feedName || '').toLowerCase();
+        const type = normalized.endsWith('temp') || normalized.endsWith('temperature')
+            ? 'temperature'
+            : normalized.endsWith('hum') || normalized.endsWith('humidity')
+                ? 'humidity'
+                : normalized.split('-').pop();
+
+        const nodeMap = [
+            { match: ['san-lorenzo', 'sanlorenzo', 'slz'], nodeId: 'SLZ-01' },
+            { match: ['villamor', 'vlm'], nodeId: 'VLM-01' },
+            { match: ['afp', 'afp-ovai', 'afpovai'], nodeId: 'AFP-01' },
+            { match: ['better-living', 'betterliving', 'blv'], nodeId: 'BLV-01' }
+        ];
+
+        const found = nodeMap.find(entry => entry.match.some(token => normalized.includes(token)));
+        const nodeId = found ? found.nodeId : null;
+
         return { nodeId, type };
     }
 
@@ -292,7 +310,7 @@ class AgricultureDashboard {
     // ── NODE STATUS ───────────────────────────────────────────────────────────
     updateNodeStatus(node) {
         const age = node.timestamp ? Date.now() - node.timestamp.getTime() : Infinity;
-        node.status = age < 30000 ? 'transmitting' : 'silent';
+        node.status = age < this.activeWindowMs ? 'transmitting' : 'silent';
     }
 
     startStatusCheck() {
@@ -301,6 +319,76 @@ class AgricultureDashboard {
             this.renderTable();
             this.updateStats();
         }, 10000);
+    }
+
+    // ── HISTORY HYDRATION ─────────────────────────────────────────────────────
+    hydrateNodesFromHistory(rows) {
+        const latestByNode = new Map();
+        let latestAggregate = null;
+
+        rows.forEach(row => {
+            const timestamp = row.created_at ? new Date(row.created_at) : null;
+            const tempValue = row.temperature ?? row.temp ?? null;
+            const humValue = row.humidity ?? row.hum ?? null;
+
+            if (tempValue !== null || humValue !== null) {
+                latestAggregate = {
+                    timestamp,
+                    temp: tempValue !== null ? Number(tempValue).toFixed(1) : null,
+                    hum: humValue !== null ? Number(humValue).toFixed(1) : null
+                };
+            }
+
+            if (!row || !row.feed_name) return;
+
+            const { nodeId, type } = this.parseFeedName(row.feed_name);
+            const node = this.nodes.find(n => n.id === nodeId);
+            if (!node) return;
+
+            const existing = latestByNode.get(nodeId) || {
+                timestamp: null,
+                temp: node.temp,
+                hum: node.hum
+            };
+
+            const readingValue = row.value ?? tempValue ?? humValue;
+
+            if (type === 'temperature' && readingValue !== undefined && readingValue !== null) {
+                existing.temp = Number(readingValue).toFixed(1);
+            } else if (type === 'humidity' && readingValue !== undefined && readingValue !== null) {
+                existing.hum = Number(readingValue).toFixed(1);
+            }
+
+            if (timestamp && (!existing.timestamp || timestamp > existing.timestamp)) {
+                existing.timestamp = timestamp;
+            }
+
+            latestByNode.set(nodeId, existing);
+        });
+
+        latestByNode.forEach((state, nodeId) => {
+            const node = this.nodes.find(n => n.id === nodeId);
+            if (!node) return;
+
+            node.temp = state.temp;
+            node.hum = state.hum;
+            node.timestamp = state.timestamp;
+            this.updateNodeStatus(node);
+        });
+
+        if (latestByNode.size === 0 && latestAggregate) {
+            this.nodes.forEach(node => {
+                if (latestAggregate.temp !== null) node.temp = latestAggregate.temp;
+                if (latestAggregate.hum !== null) node.hum = latestAggregate.hum;
+                node.timestamp = latestAggregate.timestamp || node.timestamp;
+                this.updateNodeStatus(node);
+            });
+        }
+
+        this.messageCount = rows.length;
+        this.renderTable();
+        this.updateStats();
+        this.saveNodeData();
     }
 
     // ── CONNECTION STATUS ─────────────────────────────────────────────────────
@@ -449,8 +537,18 @@ class AgricultureDashboard {
         const activeNum = this.nodes.filter(n => n.status === 'transmitting').length;
         this.activeFeeds.textContent = activeNum;
 
-        const elapsedHours = (Date.now() - this.startTime.getTime()) / 3600000;
-        const mph = elapsedHours > 0 ? Math.round(this.messageCount / elapsedHours) : 0;
+        const cutoff = Date.now() - 3600000;
+        const rowsInLastHour = this.historyRows.filter(row => {
+            const timestamp = row && row.created_at ? new Date(row.created_at).getTime() : 0;
+            return timestamp >= cutoff;
+        }).length;
+
+        const mph = rowsInLastHour > 0
+            ? rowsInLastHour
+            : (() => {
+                const elapsedHours = (Date.now() - this.startTime.getTime()) / 3600000;
+                return elapsedHours > 0 ? Math.round(this.messageCount / elapsedHours) : 0;
+            })();
         this.messagesPerHour.textContent = mph;
     }
 
@@ -485,6 +583,7 @@ class AgricultureDashboard {
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
+            this.historyRows = data;
 
             this.historyContent.innerHTML = '';
 
@@ -494,6 +593,8 @@ class AgricultureDashboard {
                 return;
             }
 
+            this.hydrateNodesFromHistory(data);
+
             // Build chart data
             const chartData = { labels: [], tempData: [], humData: [] };
             data.forEach(log => {
@@ -501,11 +602,24 @@ class AgricultureDashboard {
                 const timeStr = timestamp.toLocaleTimeString();
                 chartData.labels.push(timeStr);
 
-                const { type } = this.parseFeedName(log.feed_name);
-                if (type === 'temperature') {
-                    chartData.tempData.push(log.value);
-                } else if (type === 'humidity') {
-                    chartData.humData.push(log.value);
+                const tempValue = log.temperature ?? log.temp ?? null;
+                const humValue = log.humidity ?? log.hum ?? null;
+
+                if (log.feed_name && log.value !== undefined && log.value !== null) {
+                    const { type } = this.parseFeedName(log.feed_name);
+                    if (type === 'temperature') {
+                        chartData.tempData.push(Number(log.value));
+                        chartData.humData.push(null);
+                    } else if (type === 'humidity') {
+                        chartData.tempData.push(null);
+                        chartData.humData.push(Number(log.value));
+                    } else {
+                        chartData.tempData.push(tempValue !== null ? Number(tempValue) : null);
+                        chartData.humData.push(humValue !== null ? Number(humValue) : null);
+                    }
+                } else {
+                    chartData.tempData.push(tempValue !== null ? Number(tempValue) : null);
+                    chartData.humData.push(humValue !== null ? Number(humValue) : null);
                 }
 
                 // Also display in history list
@@ -514,20 +628,16 @@ class AgricultureDashboard {
                 const dateStr = timestamp.toLocaleString();
                 entry.innerHTML = `
                     <span class="history-ts">[${dateStr}]</span>
-                    <span class="history-feed">${log.feed_name}</span>
-                    <span class="history-value">${log.value}</span>
+                    <span class="history-feed">${log.feed_name || 'Sensor row'}</span>
+                    <span class="history-value">${log.value ?? `${tempValue ?? '--'} / ${humValue ?? '--'}`}</span>
                 `;
                 this.historyContent.appendChild(entry);
             });
 
             // Fill missing data points for alignment
-            const maxLength = Math.max(chartData.tempData.length, chartData.humData.length);
-            while (chartData.tempData.length < maxLength) {
-                chartData.tempData.push(null);
-            }
-            while (chartData.humData.length < maxLength) {
-                chartData.humData.push(null);
-            }
+            const maxLength = chartData.labels.length;
+            while (chartData.tempData.length < maxLength) chartData.tempData.push(null);
+            while (chartData.humData.length < maxLength) chartData.humData.push(null);
 
             this.updateChart(chartData);
 
@@ -587,7 +697,7 @@ class AgricultureDashboard {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     interaction: {
                         mode: 'index',
                         intersect: false

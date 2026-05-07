@@ -703,24 +703,35 @@ body {
 #chart-container-wrap {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 300px;
-    max-height: 350px;
+    min-height: 520px;
+    height: 520px;
+    max-height: 620px;
 }
 
 #sensor-chart {
-    max-height: 100%;
+    height: 100% !important;
     width: 100%;
+}
+
+.history-panel-main {
+    margin-top: 18px;
+}
+
+.history-scroll-main {
+    min-height: 520px;
+    height: 520px;
+    max-height: 620px;
 }
 
 /* HISTORY */
 .history-panel {
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 220px);
+    max-height: calc(100vh - 120px);
 }
 
 .history-panel .panel-header {
@@ -731,14 +742,14 @@ body {
 .history-scroll {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 14px;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     display: flex;
     flex-direction: column;
     gap: 5px;
-    min-height: 120px;
-    max-height: 200px;
+    min-height: 220px;
+    max-height: 360px;
 }
 
 .history-scroll::-webkit-scrollbar {
