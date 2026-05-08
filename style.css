@@ -719,7 +719,7 @@ body {
 }
 
 .history-panel-main {
-    margin-top: 18px;
+    margin-top: 0;
 }
 
 .history-scroll-main {
@@ -1006,7 +1006,7 @@ body {
 
 /* ANALYTICS */
 .analytics-panel {
-    margin-top: 18px;
+    margin-top: 0;
 }
 
 
