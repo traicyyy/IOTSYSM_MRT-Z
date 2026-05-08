@@ -906,6 +906,13 @@ class AgricultureDashboard {
             while (chartData.tempData.length < maxLength) chartData.tempData.push(null);
             while (chartData.humData.length < maxLength) chartData.humData.push(null);
 
+            const maxPoints = 15;
+            if (chartData.labels.length > maxPoints) {
+                chartData.labels = chartData.labels.slice(-maxPoints);
+                chartData.tempData = chartData.tempData.slice(-maxPoints);
+                chartData.humData = chartData.humData.slice(-maxPoints);
+            }
+
             this.updateChart(chartData);
             this.renderAnalytics();
 
@@ -1031,6 +1038,8 @@ class AgricultureDashboard {
                             },
                             ticks: {
                                 color: window.getComputedStyle(document.body).color,
+                                maxTicksLimit: 15,
+                                autoSkip: true,
                                 maxRotation: 45,
                                 minRotation: 0
                             }
