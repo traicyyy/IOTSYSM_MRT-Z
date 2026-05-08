@@ -315,8 +315,62 @@ class AgricultureDashboard {
         this.updateNodeStatus(node);
         this.renderTable();
         this.addLogEntry(reading.feed_name, value);
+        this.appendHistoryEntry(reading);
+        this.appendChartPoint(type, createdAt, value);
         this.updateStats();
         this.saveNodeData();
+    }
+
+    appendHistoryEntry(log) {
+        if (!this.historyContent) return;
+
+        const empty = this.historyContent.querySelector('.log-empty');
+        if (empty) empty.remove();
+
+        const timestamp = new Date(log.created_at);
+        const tempValue = log.temperature ?? log.temp ?? null;
+        const humValue = log.humidity ?? log.hum ?? null;
+        const entry = document.createElement('div');
+        entry.className = 'history-entry';
+        const dateStr = timestamp.toLocaleString();
+        entry.innerHTML = `
+            <span class="history-ts">[${dateStr}]</span>
+            <span class="history-feed">${log.feed_name || 'Sensor row'}</span>
+            <span class="history-value">${log.value ?? `${tempValue ?? '--'} / ${humValue ?? '--'}`}</span>
+        `;
+
+        this.historyContent.prepend(entry);
+    }
+
+    appendChartPoint(type, timestamp, rawValue) {
+        if (!this.chartCanvas) return;
+        const numericValue = Number(rawValue);
+        if (!Number.isFinite(numericValue)) return;
+
+        if (!this.chartData || !Array.isArray(this.chartData.labels)) {
+            this.chartData = { labels: [], tempData: [], humData: [] };
+        }
+
+        this.chartData.labels.push(timestamp.toLocaleTimeString());
+        if (type === 'temperature') {
+            this.chartData.tempData.push(numericValue);
+            this.chartData.humData.push(null);
+        } else if (type === 'humidity') {
+            this.chartData.tempData.push(null);
+            this.chartData.humData.push(numericValue);
+        } else {
+            this.chartData.tempData.push(null);
+            this.chartData.humData.push(null);
+        }
+
+        const maxPoints = 15;
+        if (this.chartData.labels.length > maxPoints) {
+            this.chartData.labels = this.chartData.labels.slice(-maxPoints);
+            this.chartData.tempData = this.chartData.tempData.slice(-maxPoints);
+            this.chartData.humData = this.chartData.humData.slice(-maxPoints);
+        }
+
+        this.updateChart(this.chartData);
     }
 
     // ── NODE STATUS ───────────────────────────────────────────────────────────
@@ -889,7 +943,13 @@ class AgricultureDashboard {
                     chartData.humData.push(humValue !== null ? Number(humValue) : null);
                 }
 
-                // Also display in history list
+            });
+
+            // Also display in history list (newest on top)
+            data.slice().reverse().forEach(log => {
+                const timestamp = new Date(log.created_at);
+                const tempValue = log.temperature ?? log.temp ?? null;
+                const humValue = log.humidity ?? log.hum ?? null;
                 const entry = document.createElement('div');
                 entry.className = 'history-entry';
                 const dateStr = timestamp.toLocaleString();
@@ -912,6 +972,8 @@ class AgricultureDashboard {
                 chartData.tempData = chartData.tempData.slice(-maxPoints);
                 chartData.humData = chartData.humData.slice(-maxPoints);
             }
+
+            this.chartData = chartData;
 
             this.updateChart(chartData);
             this.renderAnalytics();
