@@ -14,6 +14,10 @@ class AgricultureDashboard {
         this.chartData = { labels: [], tempData: [], humData: [] };
         this.historyRows = [];
         this.activeWindowMs = 5 * 60 * 1000;
+        this.analyticsMinHistoryPoints = 6;
+        this.analyticsForecastHours = 24;
+        this.prevAnalyticsTemp = null;
+        this.prevAnalyticsHum = null;
 
         // Load configuration
         if (typeof config === 'undefined') {
@@ -92,6 +96,14 @@ class AgricultureDashboard {
         this.activeFeeds     = document.getElementById('active-feeds');
         this.messagesPerHour = document.getElementById('messages-per-hour');
         this.uptimeEl        = document.getElementById('uptime');
+
+        this.analyticsUpdated = document.getElementById('analytics-updated');
+        this.analyticsCategory = document.getElementById('analytics-category');
+        this.analyticsEffects = document.getElementById('analytics-effects');
+        this.analyticsSummary = document.getElementById('analytics-summary');
+        this.forecastMeta = document.getElementById('forecast-meta');
+        this.forecastList = document.getElementById('forecast-list');
+        this.recommendList = document.getElementById('recommend-list');
     }
 
     // ── EVENTS ────────────────────────────────────────────────────────────────
@@ -456,9 +468,263 @@ class AgricultureDashboard {
         this.kpiHumMeta.innerHTML = metaText;
     }
 
+    // ── ANALYTICS ───────────────────────────────────────────────────────────
+    getNumericNodeValues(key) {
+        return this.nodes
+            .filter(node => node[key] !== '--')
+            .map(node => Number(node[key]))
+            .filter(value => Number.isFinite(value));
+    }
+
+    calculateStats(values) {
+        if (!values || values.length === 0) return null;
+        const sum = values.reduce((acc, value) => acc + value, 0);
+        const avg = sum / values.length;
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        return { avg, min, max };
+    }
+
+    describeTrend(current, previous) {
+        if (previous === null || previous === undefined) return { label: 'steady', arrow: '→' };
+        if (current > previous) return { label: 'rising', arrow: '↑' };
+        if (current < previous) return { label: 'falling', arrow: '↓' };
+        return { label: 'steady', arrow: '→' };
+    }
+
+    getHeatIndexCategory(avgTempC) {
+        if (avgTempC === null || avgTempC === undefined || !Number.isFinite(avgTempC)) {
+            return {
+                key: 'unknown',
+                label: '--',
+                range: '',
+                effect: 'Waiting for temperature data.'
+            };
+        }
+
+        if (avgTempC < 27) {
+            return {
+                key: 'normal',
+                label: 'Normal',
+                range: '< 27°C / < 80°F',
+                effect: 'Minimal heat stress expected for most people.'
+            };
+        }
+
+        if (avgTempC >= 27 && avgTempC < 32) {
+            return {
+                key: 'caution',
+                label: 'Caution',
+                range: '27–32°C / 80–90°F',
+                effect: 'Fatigue possible with prolonged exposure and activity.'
+            };
+        }
+
+        if (avgTempC >= 32 && avgTempC < 39) {
+            return {
+                key: 'extreme-caution',
+                label: 'Extreme Caution',
+                range: '32–39°C / 90–103°F',
+                effect: 'Heat cramps and heat exhaustion possible.'
+            };
+        }
+
+        if (avgTempC >= 39 && avgTempC < 52) {
+            return {
+                key: 'danger',
+                label: 'Danger',
+                range: '39–51°C / 103–124°F',
+                effect: 'Heat cramps and heat exhaustion likely; heat stroke possible with prolonged activity.'
+            };
+        }
+
+        return {
+            key: 'extreme-danger',
+            label: 'Extreme Danger',
+            range: '≥ 52°C / ≥ 125°F',
+            effect: 'Heat stroke highly likely with continued exposure.'
+        };
+    }
+
+    getHistoryValues(type, limit) {
+        const values = [];
+        for (let i = this.historyRows.length - 1; i >= 0 && values.length < limit; i--) {
+            const row = this.historyRows[i];
+            if (!row) continue;
+            let value = null;
+            if (row.feed_name) {
+                const parsed = this.parseFeedName(row.feed_name);
+                if (parsed.type === type && row.value !== undefined && row.value !== null) {
+                    value = row.value;
+                }
+            }
+
+            if (value === null || value === undefined) {
+                if (type === 'temperature') {
+                    value = row.temperature ?? row.temp ?? null;
+                } else {
+                    value = row.humidity ?? row.hum ?? null;
+                }
+            }
+
+            const numeric = Number(value);
+            if (Number.isFinite(numeric)) {
+                values.push(numeric);
+            }
+        }
+
+        return values.reverse();
+    }
+
+    buildForecast(values, hours, options = {}) {
+        if (!values || values.length < this.analyticsMinHistoryPoints) return null;
+
+        const { clampMin = null, clampMax = null } = options;
+        const recent = values.slice(-Math.min(values.length, 3));
+        const avgRecent = recent.reduce((acc, val) => acc + val, 0) / recent.length;
+        const first = values[0];
+        const last = values[values.length - 1];
+        const slope = (last - first) / Math.max(values.length - 1, 1);
+
+        const forecast = [];
+        for (let hour = 1; hour <= hours; hour++) {
+            let predicted = last + slope * hour;
+            predicted = (predicted * 0.65) + (avgRecent * 0.35);
+
+            if (clampMin !== null) predicted = Math.max(clampMin, predicted);
+            if (clampMax !== null) predicted = Math.min(clampMax, predicted);
+
+            forecast.push(Number(predicted.toFixed(1)));
+        }
+
+        return forecast;
+    }
+
+    buildRecommendations(categoryKey, forecastPeak, avgHum) {
+        const recommendations = [];
+
+        if (categoryKey === 'normal') {
+            recommendations.push('Maintain routine field operations with normal hydration breaks.');
+            recommendations.push('Keep monitoring sensors for sudden changes or localized hotspots.');
+            recommendations.push('Inspect shade cover and irrigation readiness before midday peaks.');
+        } else if (categoryKey === 'caution') {
+            recommendations.push('Limit prolonged outdoor work; schedule brief shade breaks every hour.');
+            recommendations.push('Hydrate regularly and monitor for early fatigue or dizziness.');
+            recommendations.push('Shift irrigation or spraying to early morning or evening hours.');
+        } else if (categoryKey === 'extreme-caution') {
+            recommendations.push('Reduce strenuous activity and rotate crews more frequently.');
+            recommendations.push('Monitor for heat cramps or exhaustion and respond quickly.');
+            recommendations.push('Run ventilation, fans, or misting during the hottest hours.');
+        } else if (categoryKey === 'danger') {
+            recommendations.push('Avoid heavy labor during peak heat; reschedule if possible.');
+            recommendations.push('Set up cooling stations and check on vulnerable individuals.');
+            recommendations.push('Trigger alerts for field supervisors and confirm sensor uptime.');
+        } else if (categoryKey === 'extreme-danger') {
+            recommendations.push('Suspend non-essential outdoor work during peak hours.');
+            recommendations.push('Activate heat emergency protocols and broadcast alerts.');
+            recommendations.push('Provide immediate access to cooling shelters and water.');
+        }
+
+        if (Number.isFinite(forecastPeak) && forecastPeak >= 39) {
+            recommendations.push('Prepare cooling measures ahead of the forecasted peak.');
+        }
+
+        if (Number.isFinite(forecastPeak) && forecastPeak >= 52) {
+            recommendations.push('Escalate to emergency response and restrict exposure.');
+        }
+
+        if (Number.isFinite(avgHum) && avgHum >= 80) {
+            recommendations.push('Increase ventilation to reduce humidity buildup in enclosed areas.');
+        }
+
+        return recommendations;
+    }
+
+    renderAnalytics() {
+        if (!this.analyticsCategory || !this.analyticsEffects || !this.analyticsSummary) return;
+
+        const tempValues = this.getNumericNodeValues('temp');
+        const humValues = this.getNumericNodeValues('hum');
+        const tempStats = this.calculateStats(tempValues);
+        const humStats = this.calculateStats(humValues);
+
+        if (this.analyticsUpdated) {
+            this.analyticsUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        }
+
+        if (!tempStats) {
+            this.analyticsCategory.textContent = '--';
+            this.analyticsCategory.className = 'analytics-badge';
+            this.analyticsEffects.textContent = 'Waiting for temperature data.';
+            this.analyticsSummary.textContent = 'Insufficient data to generate descriptive analytics.';
+            this.forecastMeta.textContent = 'Awaiting history...';
+            this.forecastList.innerHTML = '<tr><td class="forecast-empty" colspan="3">Insufficient data for forecast.</td></tr>';
+            this.recommendList.innerHTML = '<li class="muted">Waiting for readings...</li>';
+            return;
+        }
+
+        const tempTrend = this.describeTrend(tempStats.avg, this.prevAnalyticsTemp);
+        this.prevAnalyticsTemp = tempStats.avg;
+        const humTrend = humStats ? this.describeTrend(humStats.avg, this.prevAnalyticsHum) : null;
+        this.prevAnalyticsHum = humStats ? humStats.avg : this.prevAnalyticsHum;
+
+
+        const category = this.getHeatIndexCategory(tempStats.avg);
+        this.analyticsCategory.textContent = `${category.label} (${category.range})`;
+        this.analyticsCategory.className = `analytics-badge ${category.key}`;
+        this.analyticsEffects.textContent = category.effect;
+
+        const summaryParts = [
+            `Temp avg ${tempStats.avg.toFixed(1)}°C (${tempTrend.label}), min ${tempStats.min.toFixed(1)}°C, max ${tempStats.max.toFixed(1)}°C`
+        ];
+        if (humStats) {
+            summaryParts.push(
+                `Hum avg ${humStats.avg.toFixed(1)}% (${humTrend ? humTrend.label : 'steady'}), min ${humStats.min.toFixed(1)}%, max ${humStats.max.toFixed(1)}%`
+            );
+        }
+        this.analyticsSummary.textContent = summaryParts.join(' | ');
+
+        const tempHistory = this.getHistoryValues('temperature', 48);
+        const humHistory = this.getHistoryValues('humidity', 48);
+        const tempForecast = this.buildForecast(tempHistory, this.analyticsForecastHours);
+        const humForecast = this.buildForecast(humHistory, this.analyticsForecastHours, { clampMin: 0, clampMax: 100 });
+
+        this.forecastList.innerHTML = '';
+        if (!tempForecast || !humForecast) {
+            this.forecastMeta.textContent = 'Awaiting enough history to forecast.';
+            this.forecastList.innerHTML = '<tr><td class="forecast-empty" colspan="3">Insufficient data for forecast.</td></tr>';
+        } else {
+            const now = new Date();
+            for (let i = 0; i < this.analyticsForecastHours; i++) {
+                const hour = new Date(now.getTime() + (i + 1) * 3600000);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>${tempForecast[i].toFixed(1)}°C</td>
+                    <td>${humForecast[i].toFixed(1)}%</td>
+                `;
+                this.forecastList.appendChild(row);
+            }
+
+            const peakTemp = Math.max(...tempForecast);
+            const peakHum = Math.max(...humForecast);
+            this.forecastMeta.textContent = `Peak temp ${peakTemp.toFixed(1)}°C | Peak hum ${peakHum.toFixed(1)}%`;
+        }
+
+        const peakTemp = tempForecast ? Math.max(...tempForecast) : null;
+        const recs = this.buildRecommendations(category.key, peakTemp, humStats ? humStats.avg : null);
+        this.recommendList.innerHTML = '';
+        recs.forEach(rec => {
+            const item = document.createElement('li');
+            item.textContent = rec;
+            this.recommendList.appendChild(item);
+        });
+    }
+
     // ── TABLE ─────────────────────────────────────────────────────────────────
     renderTable() {
         this.renderKpiCards();
+        this.renderAnalytics();
         this.tableBody.innerHTML = '';
 
         this.nodes.forEach(node => {
@@ -590,6 +856,7 @@ class AgricultureDashboard {
             if (data.length === 0) {
                 this.historyContent.innerHTML = '<div class="log-empty">No historical data found.</div>';
                 this.updateChart([]);
+                this.renderAnalytics();
                 return;
             }
 
@@ -640,6 +907,7 @@ class AgricultureDashboard {
             while (chartData.humData.length < maxLength) chartData.humData.push(null);
 
             this.updateChart(chartData);
+            this.renderAnalytics();
 
         } catch (err) {
             console.error('Error loading history:', err);

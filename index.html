@@ -149,9 +149,48 @@
                             <div class="kpi-meta" id="kpi-hum-meta">Waiting for data…</div>
                         </div>
                     </div>
-
-
                 </div>
+
+                <!-- ANALYTICS -->
+                <section class="panel analytics-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">
+                            <span class="panel-title-icon">📈</span>
+                            Analytics
+                        </h3>
+                        <span class="panel-badge" id="analytics-updated">Waiting…</span>
+                    </div>
+                    <div class="analytics-grid">
+                        <div class="analytics-card">
+                            <div class="analytics-title">Interpretation</div>
+                            <div class="analytics-badge" id="analytics-category">--</div>
+                            <p class="analytics-effect" id="analytics-effects">Waiting for temperature data.</p>
+                            <div class="analytics-summary" id="analytics-summary">--</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-title">Forecast (Next 24 Hours)</div>
+                            <div class="forecast-meta" id="forecast-meta">Awaiting history...</div>
+                            <div class="forecast-scroll">
+                                <table class="forecast-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Hour</th>
+                                            <th>Temp</th>
+                                            <th>Hum</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="forecast-list"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-title">Recommendations</div>
+                            <ul class="recommend-list" id="recommend-list">
+                                <li class="muted">Waiting for readings...</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
 
             <!-- HISTORY CHART -->
             <section class="panel history-panel history-panel-main">
