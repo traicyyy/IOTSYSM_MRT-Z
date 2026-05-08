@@ -21,7 +21,7 @@ const config = {
     // Sensor node definitions
     SENSOR_NODES: [
         { id: 'VLM-01', location: 'Villamor' },
-        { id: 'AFP-01', location: 'AFP OVai' },
+        { id: 'AFP-01', location: 'AFPOVAI' },
         { id: 'SLZ-01', location: 'San Lorenzo' },
         { id: 'BLV-01', location: 'Better Living' }
     ],

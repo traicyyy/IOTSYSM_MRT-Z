@@ -12,8 +12,8 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 SENSORS = [
     ("Villamor", "temp"),
     ("Villamor", "hum"),
-    ("AFP OVai", "temp"),
-    ("AFP OVai", "hum"),
+    ("AFPOVAI", "temp"),
+    ("AFPOVAI", "hum"),
     ("San Lorenzo", "temp"),
     ("San Lorenzo", "hum"),
     ("Better Living", "temp"),

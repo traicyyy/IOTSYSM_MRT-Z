@@ -284,7 +284,7 @@ class AgricultureDashboard {
         const nodeMap = [
             { match: ['san-lorenzo', 'sanlorenzo', 'slz'], nodeId: 'SLZ-01' },
             { match: ['villamor', 'vlm'], nodeId: 'VLM-01' },
-            { match: ['afp', 'afp-ovai', 'afpovai'], nodeId: 'AFP-01' },
+            { match: ['afp', 'afpovai', 'afpovai'], nodeId: 'AFP-01' },
             { match: ['better-living', 'betterliving', 'blv'], nodeId: 'BLV-01' }
         ];
 

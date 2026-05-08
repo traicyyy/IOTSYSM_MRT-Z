@@ -87,7 +87,7 @@ Format: `{NodeID}-{Type}`
 Example feeds:
 - `VLM-01-temperature` → Villamor node, temperature reading
 - `VLM-01-humidity` → Villamor node, humidity reading
-- `AFP-01-temperature` → AFP OVai node, temperature
+- `AFP-01-temperature` → AFPOVAI node, temperature
 - etc.
 
 ---

@@ -213,7 +213,7 @@ Feeds are named: `{NodeID}-{Type}`
 | Node | Location | Feed Names |
 |------|----------|-----------|
 | VLM-01 | Villamor | `VLM-01-temperature`, `VLM-01-humidity` |
-| AFP-01 | AFP OVai | `AFP-01-temperature`, `AFP-01-humidity` |
+| AFP-01 | AFPOVAI | `AFP-01-temperature`, `AFP-01-humidity` |
 | SLZ-01 | San Lorenzo | `SLZ-01-temperature`, `SLZ-01-humidity` |
 | BLV-01 | Better Living | `BLV-01-temperature`, `BLV-01-humidity` |
 
@@ -222,7 +222,7 @@ To add more nodes, edit `config.js`:
 ```javascript
 SENSOR_NODES: [
     { id: 'VLM-01', location: 'Villamor' },
-    { id: 'AFP-01', location: 'AFP OVai' },
+    { id: 'AFP-01', location: 'AFPOVAI' },
     { id: 'SLZ-01', location: 'San Lorenzo' },
     { id: 'BLV-01', location: 'Better Living' },
     { id: 'YOB-01', location: 'New Location' }  // ← Add here
