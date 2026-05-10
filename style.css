@@ -1083,14 +1083,6 @@ body {
     margin-top: 0;
 }
 
-
-.analytics-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    padding: 20px;
-}
-
 .analytics-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
@@ -1099,7 +1091,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 180px;
+    min-height: 200px;
+    align-self: stretch;
 }
 
 .analytics-title {
@@ -1292,5 +1285,240 @@ body {
         grid-template-columns: 1fr;
         padding: 12px 14px;
         gap: 12px;
+    }
+}
+
+    /* ============================
+   ANALYTICS — NEW CARDS (v8)
+   Append these to the end of style.css
+   ============================ */
+
+/* Analytics grid: responsive layout */
+.analytics-grid {
+    display: grid;
+    gap: 24px;
+}
+
+/* Row 1: 3 columns (Interpretation, Forecast, Recommendations) */
+.analytics-grid-row-1 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+}
+
+/* Row 2: 2 columns (Anomaly Log, Correlation) */
+.analytics-grid-row-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+}
+
+/* Wide card spans both columns */
+.analytics-card-wide {
+    grid-column: 1 / -1;
+}
+
+/* ── Per-Node Stats Table ── */
+.node-stats-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+}
+
+.node-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+}
+
+.node-stats-table thead {
+    background: var(--bg-panel-alt);
+}
+
+.node-stats-table th {
+    padding: 8px 10px;
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+}
+
+.node-stats-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.node-stats-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.node-stats-table tbody tr:hover {
+    background: var(--bg-row-hover);
+}
+
+.node-trend {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+/* ── Anomaly Log ── */
+.anomaly-log {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.anomaly-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+}
+
+.anomaly-item.anomaly-danger {
+    border-color: #f8717140;
+    background: #f8717110;
+}
+
+.anomaly-item.anomaly-warn {
+    border-color: #fbbf2440;
+    background: #fbbf2410;
+}
+
+.anomaly-item.anomaly-info {
+    border-color: #60a5fa40;
+    background: #60a5fa10;
+}
+
+.anomaly-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+    background: var(--text-muted);
+}
+
+.anomaly-danger .anomaly-dot { background: var(--red); }
+.anomaly-warn .anomaly-dot   { background: var(--amber); }
+.anomaly-info .anomaly-dot   { background: var(--blue); }
+
+.anomaly-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.anomaly-label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.anomaly-danger .anomaly-label { color: var(--red); }
+.anomaly-warn .anomaly-label   { color: var(--amber); }
+.anomaly-info .anomaly-label   { color: var(--blue); }
+
+.anomaly-detail {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+.anomaly-empty {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 12px 0;
+}
+
+.anomaly-clear {
+    color: var(--accent);
+}
+
+/* ── Correlation Bars ── */
+.corr-row {
+    margin-bottom: 14px;
+}
+
+.corr-row:last-child {
+    margin-bottom: 0;
+}
+
+.corr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.corr-node {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.corr-val {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.corr-val.corr-positive { color: var(--accent); }
+.corr-val.corr-negative { color: var(--red); }
+.corr-val.corr-neutral  { color: var(--text-muted); }
+
+.corr-track {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-panel-alt);
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+
+.corr-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease;
+    min-width: 2px;
+}
+
+.corr-fill.corr-positive { background: var(--accent); }
+.corr-fill.corr-negative { background: var(--red); }
+.corr-fill.corr-neutral  { background: var(--text-muted); }
+
+.corr-desc {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* ── Responsive overrides ── */
+@media (max-width: 900px) {
+    .analytics-grid-row-1 {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-grid-row-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .analytics-card-wide {
+        grid-column: 1;
     }
 }

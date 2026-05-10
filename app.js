@@ -1,6 +1,5 @@
 // Smart Agriculture IoT Dashboard
-// v7 — Supabase Real-Time WebSocket (wss://) + REST API History
-// Uses sensor_logs table with feed_name schema
+// v8 — Real Analytics: per-node stats, anomaly detection, correlation, data-driven recommendations
 
 class AgricultureDashboard {
     constructor() {
@@ -19,7 +18,6 @@ class AgricultureDashboard {
         this.prevAnalyticsTemp = null;
         this.prevAnalyticsHum = null;
 
-        // Load configuration
         if (typeof config === 'undefined') {
             console.error('[Dashboard] Config not loaded!');
             alert('Configuration error: config.js not loaded.');
@@ -49,8 +47,7 @@ class AgricultureDashboard {
 
         this.initElements();
         this.bindEvents();
-        
-        // Initialize sensor nodes (from config)
+
         this.nodes = this.SENSOR_NODES.map(n => ({
             ...n,
             temp: '--',
@@ -62,59 +59,52 @@ class AgricultureDashboard {
         this.loadSavedNodeData();
         this.initTheme();
         this.renderTable();
-        
-        // Start Supabase real-time subscription (WebSocket on port 443)
         this.startSupabaseSubscription();
     }
 
     // ── DOM REFS ──────────────────────────────────────────────────────────────
     initElements() {
-        this.dashPage        = document.getElementById('dashboard-page');
-        this.disconnectBtn   = document.getElementById('disconnect-btn');
-        this.refreshBtn      = document.getElementById('refresh-btn');
-        this.themeToggle     = document.getElementById('theme-toggle');
-        this.themeIcon       = document.getElementById('theme-icon');
+        this.dashPage         = document.getElementById('dashboard-page');
+        this.disconnectBtn    = document.getElementById('disconnect-btn');
+        this.refreshBtn       = document.getElementById('refresh-btn');
+        this.themeToggle      = document.getElementById('theme-toggle');
+        this.themeIcon        = document.getElementById('theme-icon');
 
-        this.connLed         = document.getElementById('conn-led');
-        this.connText        = document.getElementById('conn-text');
+        this.connLed          = document.getElementById('conn-led');
+        this.connText         = document.getElementById('conn-text');
 
-        this.tableBody       = document.getElementById('sensor-table-body');
-        this.activeCount     = document.getElementById('active-count');
+        this.tableBody        = document.getElementById('sensor-table-body');
+        this.activeCount      = document.getElementById('active-count');
 
-        this.kpiTempVal      = document.getElementById('kpi-temp-val');
-        this.kpiTempMeta     = document.getElementById('kpi-temp-meta');
-        this.kpiHumVal       = document.getElementById('kpi-hum-val');
-        this.kpiHumMeta      = document.getElementById('kpi-hum-meta');
+        this.kpiTempVal       = document.getElementById('kpi-temp-val');
+        this.kpiTempMeta      = document.getElementById('kpi-temp-meta');
+        this.kpiHumVal        = document.getElementById('kpi-hum-val');
+        this.kpiHumMeta       = document.getElementById('kpi-hum-meta');
 
-        this.logContent      = document.getElementById('mqtt-log-content');
-        this.clearLogBtn     = document.getElementById('clear-log');
+        this.logContent       = document.getElementById('mqtt-log-content');
+        this.clearLogBtn      = document.getElementById('clear-log');
 
-        this.historyContent  = document.getElementById('history-content');
-        this.loadHistoryBtn  = document.getElementById('load-history-btn');
-        this.chartCanvas     = document.getElementById('sensor-chart');
+        this.historyContent   = document.getElementById('history-content');
+        this.loadHistoryBtn   = document.getElementById('load-history-btn');
+        this.chartCanvas      = document.getElementById('sensor-chart');
 
-        this.activeFeeds     = document.getElementById('active-feeds');
-        this.messagesPerHour = document.getElementById('messages-per-hour');
-        this.uptimeEl        = document.getElementById('uptime');
+        this.activeFeeds      = document.getElementById('active-feeds');
+        this.messagesPerHour  = document.getElementById('messages-per-hour');
+        this.uptimeEl         = document.getElementById('uptime');
 
-        this.analyticsUpdated = document.getElementById('analytics-updated');
+        // Analytics DOM refs
+        this.analyticsUpdated  = document.getElementById('analytics-updated');
         this.analyticsCategory = document.getElementById('analytics-category');
-        this.analyticsEffects = document.getElementById('analytics-effects');
-        this.analyticsSummary = document.getElementById('analytics-summary');
-        this.forecastMeta = document.getElementById('forecast-meta');
-        this.forecastTempValue = document.getElementById('forecast-temp-value');
-        this.forecastTempRange = document.getElementById('forecast-temp-range');
-        this.forecastTempStep1 = document.getElementById('forecast-temp-step1');
-        this.forecastTempStep2 = document.getElementById('forecast-temp-step2');
-        this.forecastTempStep3 = document.getElementById('forecast-temp-step3');
-        this.forecastTempTrend = document.getElementById('forecast-temp-trend');
-        this.forecastHumValue = document.getElementById('forecast-hum-value');
-        this.forecastHumRange = document.getElementById('forecast-hum-range');
-        this.forecastHumStep1 = document.getElementById('forecast-hum-step1');
-        this.forecastHumStep2 = document.getElementById('forecast-hum-step2');
-        this.forecastHumStep3 = document.getElementById('forecast-hum-step3');
-        this.forecastHumTrend = document.getElementById('forecast-hum-trend');
-        this.recommendList = document.getElementById('recommend-list');
+        this.analyticsEffects  = document.getElementById('analytics-effects');
+        this.analyticsSummary  = document.getElementById('analytics-summary');
+        this.forecastMeta      = document.getElementById('forecast-meta');
+        this.forecastList      = document.getElementById('forecast-list');
+        this.recommendList     = document.getElementById('recommend-list');
+
+        // New analytics card refs
+        this.nodeStatsBody     = document.getElementById('node-stats-body');
+        this.anomalyLog        = document.getElementById('anomaly-log');
+        this.corrBody          = document.getElementById('corr-body');
     }
 
     // ── EVENTS ────────────────────────────────────────────────────────────────
@@ -190,11 +180,11 @@ class AgricultureDashboard {
         }
     }
 
-    // ── SUPABASE REAL-TIME SUBSCRIPTION (WebSocket wss:// on Port 443) ────────
+    // ── SUPABASE REAL-TIME ────────────────────────────────────────────────────
     startSupabaseSubscription() {
         console.log('[Supabase] Establishing secure WebSocket (wss://) on Port 443...');
         this.addSystemLog('Connecting to Supabase real-time...');
-        
+
         this.supabaseSubscription = this.supabase
             .channel('sensor_logs_changes')
             .on('postgres_changes', {
@@ -214,10 +204,7 @@ class AgricultureDashboard {
                     this.updateStats();
                     console.log('[Supabase] ✓ Connected via wss:// on Port 443');
                     this.addSystemLog('✓ Connected via secure WebSocket (wss://) on Port 443');
-                    // Auto-fetch recent history once we're subscribed so the UI shows existing data
-                    try {
-                        this.loadHistory();
-                    } catch (e) {
+                    try { this.loadHistory(); } catch (e) {
                         console.warn('[Dashboard] Failed to auto-load history on subscribe:', e);
                     }
                     this.updateConnectionStatus();
@@ -233,57 +220,42 @@ class AgricultureDashboard {
                     this.updateConnectionStatus();
                 } else if (status === 'CLOSED') {
                     this.connected = false;
-                    console.log('[Supabase] WebSocket connection closed');
                     this.updateConnectionStatus();
                 }
             });
     }
 
-    // ── RECONNECT ─────────────────────────────────────────────────────────────
     reconnect() {
         this.addSystemLog('Attempting to reconnect...');
-        
         if (this.supabaseSubscription) {
-            try {
-                this.supabase.removeChannel(this.supabaseSubscription);
-            } catch (_) {}
+            try { this.supabase.removeChannel(this.supabaseSubscription); } catch (_) {}
         }
-        
         clearInterval(this.statusCheckInterval);
         clearInterval(this.uptimeInterval);
         this.statusCheckInterval = null;
         this.uptimeInterval = null;
         this.connected = false;
-        
         this.updateConnectionStatus();
         this.startSupabaseSubscription();
     }
 
-    // ── DISCONNECT ────────────────────────────────────────────────────────────
     disconnect() {
         if (this.supabaseSubscription) {
-            try {
-                this.supabase.removeChannel(this.supabaseSubscription);
-            } catch (_) {}
+            try { this.supabase.removeChannel(this.supabaseSubscription); } catch (_) {}
             this.supabaseSubscription = null;
         }
-        
         this.connected = false;
         this.addSystemLog('Disconnected from Supabase');
         clearInterval(this.statusCheckInterval);
         clearInterval(this.uptimeInterval);
         this.statusCheckInterval = null;
         this.uptimeInterval = null;
-
         this.updateConnectionStatus();
         this.resetNodeData();
         this.renderTable();
     }
 
     // ── PARSE FEED NAME ────────────────────────────────────────────────────────
-    // Feed name format can be:
-    // - "VLM-01-temperature"
-    // - "ndato/feeds/san-lorenzo-temp"
     parseFeedName(feedName) {
         const normalized = String(feedName || '').toLowerCase();
         const type = normalized.endsWith('temp') || normalized.endsWith('temperature')
@@ -295,7 +267,7 @@ class AgricultureDashboard {
         const nodeMap = [
             { match: ['san-lorenzo', 'sanlorenzo', 'slz'], nodeId: 'SLZ-01' },
             { match: ['villamor', 'vlm'], nodeId: 'VLM-01' },
-            { match: ['afp', 'afpovai', 'afpovai'], nodeId: 'AFP-01' },
+            { match: ['afp', 'afpovai'], nodeId: 'AFP-01' },
             { match: ['better-living', 'betterliving', 'blv'], nodeId: 'BLV-01' }
         ];
 
@@ -305,10 +277,9 @@ class AgricultureDashboard {
         return { nodeId, type };
     }
 
-    // ── HANDLE NEW READINGS FROM SENSOR_LOGS ──────────────────────────────────
+    // ── HANDLE NEW READINGS ────────────────────────────────────────────────────
     handleSupabaseInsert(reading) {
         this.messageCount++;
-
         const { nodeId, type } = this.parseFeedName(reading.feed_name);
         const value = reading.value;
         const createdAt = new Date(reading.created_at);
@@ -323,6 +294,9 @@ class AgricultureDashboard {
         }
         node.timestamp = createdAt;
 
+        // Append to historyRows so analytics sees it immediately
+        this.historyRows.push(reading);
+
         this.updateNodeStatus(node);
         this.renderTable();
         this.addLogEntry(reading.feed_name, value);
@@ -334,22 +308,17 @@ class AgricultureDashboard {
 
     appendHistoryEntry(log) {
         if (!this.historyContent) return;
-
         const empty = this.historyContent.querySelector('.log-empty');
         if (empty) empty.remove();
 
         const timestamp = new Date(log.created_at);
-        const tempValue = log.temperature ?? log.temp ?? null;
-        const humValue = log.humidity ?? log.hum ?? null;
         const entry = document.createElement('div');
         entry.className = 'history-entry';
-        const dateStr = timestamp.toLocaleString();
         entry.innerHTML = `
-            <span class="history-ts">[${dateStr}]</span>
+            <span class="history-ts">[${timestamp.toLocaleString()}]</span>
             <span class="history-feed">${log.feed_name || 'Sensor row'}</span>
-            <span class="history-value">${log.value ?? `${tempValue ?? '--'} / ${humValue ?? '--'}`}</span>
+            <span class="history-value">${log.value ?? '--'}</span>
         `;
-
         this.historyContent.prepend(entry);
     }
 
@@ -401,23 +370,10 @@ class AgricultureDashboard {
     // ── HISTORY HYDRATION ─────────────────────────────────────────────────────
     hydrateNodesFromHistory(rows) {
         const latestByNode = new Map();
-        let latestAggregate = null;
 
         rows.forEach(row => {
-            const timestamp = row.created_at ? new Date(row.created_at) : null;
-            const tempValue = row.temperature ?? row.temp ?? null;
-            const humValue = row.humidity ?? row.hum ?? null;
-
-            if (tempValue !== null || humValue !== null) {
-                latestAggregate = {
-                    timestamp,
-                    temp: tempValue !== null ? Number(tempValue).toFixed(1) : null,
-                    hum: humValue !== null ? Number(humValue).toFixed(1) : null
-                };
-            }
-
             if (!row || !row.feed_name) return;
-
+            const timestamp = row.created_at ? new Date(row.created_at) : null;
             const { nodeId, type } = this.parseFeedName(row.feed_name);
             const node = this.nodes.find(n => n.id === nodeId);
             if (!node) return;
@@ -428,8 +384,7 @@ class AgricultureDashboard {
                 hum: node.hum
             };
 
-            const readingValue = row.value ?? tempValue ?? humValue;
-
+            const readingValue = row.value;
             if (type === 'temperature' && readingValue !== undefined && readingValue !== null) {
                 existing.temp = Number(readingValue).toFixed(1);
             } else if (type === 'humidity' && readingValue !== undefined && readingValue !== null) {
@@ -446,21 +401,11 @@ class AgricultureDashboard {
         latestByNode.forEach((state, nodeId) => {
             const node = this.nodes.find(n => n.id === nodeId);
             if (!node) return;
-
             node.temp = state.temp;
             node.hum = state.hum;
             node.timestamp = state.timestamp;
             this.updateNodeStatus(node);
         });
-
-        if (latestByNode.size === 0 && latestAggregate) {
-            this.nodes.forEach(node => {
-                if (latestAggregate.temp !== null) node.temp = latestAggregate.temp;
-                if (latestAggregate.hum !== null) node.hum = latestAggregate.hum;
-                node.timestamp = latestAggregate.timestamp || node.timestamp;
-                this.updateNodeStatus(node);
-            });
-        }
 
         this.messageCount = rows.length;
         this.renderTable();
@@ -468,7 +413,6 @@ class AgricultureDashboard {
         this.saveNodeData();
     }
 
-    // ── CONNECTION STATUS ─────────────────────────────────────────────────────
     updateConnectionStatus() {
         if (this.connected) {
             this.connLed.classList.add('on');
@@ -481,75 +425,264 @@ class AgricultureDashboard {
 
     // ── KPI CARDS ─────────────────────────────────────────────────────────────
     renderKpiCards() {
-        // Temperature KPI
         const nodesWithTemp = this.nodes.filter(n => n.temp !== '--');
         let tempVals = nodesWithTemp.map(n => parseFloat(n.temp));
-        let tempDisplay = '--';
         if (tempVals.length > 0) {
             const avgTemp = tempVals.reduce((s, v) => s + v, 0) / tempVals.length;
-            const tempMin = Math.min(...tempVals).toFixed(1);
-            const tempMax = Math.max(...tempVals).toFixed(1);
             if (!this.prevAvgTemp) this.prevAvgTemp = avgTemp;
             const tempTrend = avgTemp > this.prevAvgTemp ? '↑' : avgTemp < this.prevAvgTemp ? '↓' : '→';
             this.prevAvgTemp = avgTemp;
-            tempDisplay = `${avgTemp.toFixed(1)}<span>°C</span> <span class="kpi-trend">${tempTrend}</span>`;
+            this.kpiTempVal.innerHTML = `${avgTemp.toFixed(1)}<span>°C</span> <span class="kpi-trend">${tempTrend}</span>`;
         } else {
-            tempDisplay = `--<span>°C</span>`;
+            this.kpiTempVal.innerHTML = `--<span>°C</span>`;
         }
-        this.kpiTempVal.innerHTML = tempDisplay;
 
-        // Humidity KPI
         const nodesWithHum = this.nodes.filter(n => n.hum !== '--');
         let humVals = nodesWithHum.map(n => parseFloat(n.hum));
-        let humDisplay = '--';
         if (humVals.length > 0) {
             const avgHum = humVals.reduce((s, v) => s + v, 0) / humVals.length;
             if (!this.prevAvgHum) this.prevAvgHum = avgHum;
             const humTrend = avgHum > this.prevAvgHum ? '↑' : avgHum < this.prevAvgHum ? '↓' : '→';
             this.prevAvgHum = avgHum;
-            humDisplay = `${avgHum.toFixed(1)}<span>%</span> <span class="kpi-trend">${humTrend}</span>`;
+            this.kpiHumVal.innerHTML = `${avgHum.toFixed(1)}<span>%</span> <span class="kpi-trend">${humTrend}</span>`;
         } else {
-            humDisplay = `--<span>%</span>`;
+            this.kpiHumVal.innerHTML = `--<span>%</span>`;
         }
-        this.kpiHumVal.innerHTML = humDisplay;
 
-        // Meta
-        const activeNodes = this.nodes.filter(n => n.status === 'transmitting');
+        const active = this.nodes.filter(n => n.status === 'transmitting');
         const total = this.nodes.length;
-        const active = activeNodes.length;
-        let metaText = '';
-        if (active > 0) {
-            const lastUpdate = Math.max(...this.nodes.map(n => n.timestamp ? n.timestamp.getTime() : 0));
-            if (lastUpdate > 0) {
-                const date = new Date(lastUpdate);
-                metaText = `<span class="kpi-badge active-badge">${active} of ${total} nodes active</span> <span class="kpi-update">Last: ${date.toLocaleTimeString()}</span>`;
-            } else {
-                metaText = `<span class="kpi-badge active-badge">${active} of ${total} nodes active</span>`;
-            }
-        } else {
-            metaText = `<span class="kpi-badge silent-badge">No active nodes</span>`;
-        }
+        let metaText = active.length > 0
+            ? `<span class="kpi-badge active-badge">${active.length} of ${total} nodes active</span>`
+            : `<span class="kpi-badge silent-badge">No active nodes</span>`;
         this.kpiTempMeta.innerHTML = metaText;
         this.kpiHumMeta.innerHTML = metaText;
     }
 
-    // ── ANALYTICS ───────────────────────────────────────────────────────────
-    getNumericNodeValues(key) {
-        return this.nodes
-            .filter(node => node[key] !== '--')
-            .map(node => Number(node[key]))
-            .filter(value => Number.isFinite(value));
+    // ══════════════════════════════════════════════════════════════════════════
+    // ANALYTICS ENGINE — all computed from this.historyRows
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Groups historyRows by node, returns:
+    // { nodeId: { temps: [numbers], hums: [numbers], timestamps: [Date] } }
+    groupRowsByNode() {
+        const groups = {};
+
+        this.historyRows.forEach(row => {
+            if (!row || !row.feed_name) return;
+            const { nodeId, type } = this.parseFeedName(row.feed_name);
+            if (!nodeId) return;
+            const val = Number(row.value);
+            if (!Number.isFinite(val)) return;
+
+            if (!groups[nodeId]) {
+                groups[nodeId] = { temps: [], hums: [], timestamps: [] };
+            }
+
+            const ts = row.created_at ? new Date(row.created_at) : new Date();
+            groups[nodeId].timestamps.push(ts);
+
+            if (type === 'temperature') {
+                groups[nodeId].temps.push(val);
+            } else if (type === 'humidity') {
+                groups[nodeId].hums.push(val);
+            }
+        });
+
+        return groups;
     }
 
-    calculateStats(values) {
+    // Computes avg, min, max, std for an array of numbers
+    computeStats(values) {
         if (!values || values.length === 0) return null;
-        const sum = values.reduce((acc, value) => acc + value, 0);
-        const avg = sum / values.length;
+        const avg = values.reduce((a, b) => a + b, 0) / values.length;
         const min = Math.min(...values);
         const max = Math.max(...values);
-        return { avg, min, max };
+        const variance = values.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / values.length;
+        const std = Math.sqrt(variance);
+        return { avg, min, max, std, count: values.length };
     }
 
+    // Anomaly detection: flags readings that are > 2 std from node avg.
+    // Also detects silence gaps relative to expected 15-min publish cycle.
+    detectAnomalies(groups) {
+        const anomalies = [];
+
+        Object.entries(groups).forEach(([nodeId, data]) => {
+            const node = this.nodes.find(n => n.id === nodeId);
+            const label = node ? node.location : nodeId;
+
+            const tempStats = this.computeStats(data.temps);
+            const humStats = this.computeStats(data.hums);
+
+            // Spike detection — temp
+            if (tempStats && tempStats.std > 0) {
+                data.temps.forEach(val => {
+                    const zScore = Math.abs(val - tempStats.avg) / tempStats.std;
+                    if (zScore > 2) {
+                        const deviation = (val - tempStats.avg).toFixed(1);
+                        const sign = deviation > 0 ? '+' : '';
+                        anomalies.push({
+                            severity: zScore > 3 ? 'danger' : 'warn',
+                            label: `${label} — temp spike`,
+                            detail: `${val.toFixed(1)}°C recorded (${sign}${deviation}°C from ${tempStats.avg.toFixed(1)}°C avg)`
+                        });
+                    }
+                });
+            }
+
+            // Spike detection — humidity
+            if (humStats && humStats.std > 0) {
+                data.hums.forEach(val => {
+                    const zScore = Math.abs(val - humStats.avg) / humStats.std;
+                    if (zScore > 2) {
+                        const deviation = (val - humStats.avg).toFixed(1);
+                        const sign = deviation > 0 ? '+' : '';
+                        anomalies.push({
+                            severity: zScore > 3 ? 'danger' : 'warn',
+                            label: `${label} — humidity spike`,
+                            detail: `${val.toFixed(1)}% recorded (${sign}${deviation}% from ${humStats.avg.toFixed(1)}% avg)`
+                        });
+                    }
+                });
+            }
+
+            // Silence gap detection — check if node went quiet longer than 2x its expected cycle
+            const ts = data.timestamps.slice().sort((a, b) => a - b);
+            if (ts.length >= 2) {
+                const expectedGapMs = 15 * 60 * 1000; // 15-min sleep cycle per Arduino
+                for (let i = 1; i < ts.length; i++) {
+                    const gapMs = ts[i] - ts[i - 1];
+                    if (gapMs > expectedGapMs * 2) {
+                        const gapMin = Math.round(gapMs / 60000);
+                        anomalies.push({
+                            severity: 'info',
+                            label: `${label} — silence gap`,
+                            detail: `No readings for ${gapMin} min (expected ~15 min cycle)`
+                        });
+                    }
+                }
+            }
+        });
+
+        // Deduplicate repeated spike flags (keep first occurrence per type)
+        const seen = new Set();
+        return anomalies.filter(a => {
+            const key = a.label;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    // Pearson correlation coefficient between two arrays of equal length
+    pearsonCorrelation(xs, ys) {
+        const n = Math.min(xs.length, ys.length);
+        if (n < 3) return null;
+
+        const ax = xs.slice(0, n);
+        const ay = ys.slice(0, n);
+
+        const meanX = ax.reduce((a, b) => a + b, 0) / n;
+        const meanY = ay.reduce((a, b) => a + b, 0) / n;
+
+        let num = 0, denX = 0, denY = 0;
+        for (let i = 0; i < n; i++) {
+            const dx = ax[i] - meanX;
+            const dy = ay[i] - meanY;
+            num += dx * dy;
+            denX += dx * dx;
+            denY += dy * dy;
+        }
+
+        const denom = Math.sqrt(denX * denY);
+        if (denom === 0) return null;
+        return num / denom;
+    }
+
+    // Describe correlation value in plain language
+    describeCorrelation(r) {
+        if (r === null) return { text: 'Insufficient data', cls: 'corr-neutral' };
+        const abs = Math.abs(r);
+        const dir = r >= 0 ? 'positive' : 'negative';
+        let strength;
+        if (abs >= 0.7) strength = 'strong';
+        else if (abs >= 0.4) strength = 'moderate';
+        else if (abs >= 0.2) strength = 'weak';
+        else strength = 'negligible';
+
+        const cls = r >= 0 ? 'corr-positive' : 'corr-negative';
+        return { text: `${strength} ${dir}`, cls };
+    }
+
+    // Build data-driven recommendations from actual per-node stats + anomalies
+    buildDataDrivenRecommendations(groups, anomalies, categoryKey) {
+        const recs = [];
+
+        // Base category recommendations
+        if (categoryKey === 'normal') {
+            recs.push('Conditions are within normal range. Maintain routine field operations.');
+        } else if (categoryKey === 'caution') {
+            recs.push('Limit prolonged outdoor work. Schedule shade breaks every hour.');
+            recs.push('Shift irrigation and spraying to early morning or evening hours.');
+        } else if (categoryKey === 'extreme-caution') {
+            recs.push('Reduce strenuous activity and rotate crews more frequently.');
+            recs.push('Run ventilation, fans, or misting during the hottest hours.');
+        } else if (categoryKey === 'danger') {
+            recs.push('Avoid heavy labor during peak heat. Set up cooling stations.');
+        } else if (categoryKey === 'extreme-danger') {
+            recs.push('Suspend non-essential outdoor work. Activate emergency protocols.');
+        }
+
+        // Per-node specific recommendations
+        const nodeEntries = Object.entries(groups);
+
+        // Find hottest node
+        let hottestNode = null, hottestAvg = -Infinity;
+        nodeEntries.forEach(([nodeId, data]) => {
+            const stats = this.computeStats(data.temps);
+            if (stats && stats.avg > hottestAvg) {
+                hottestAvg = stats.avg;
+                hottestNode = nodeId;
+            }
+        });
+        if (hottestNode) {
+            const node = this.nodes.find(n => n.id === hottestNode);
+            const label = node ? node.location : hottestNode;
+            if (hottestAvg >= 35) {
+                recs.push(`${label} is the hottest node (avg ${hottestAvg.toFixed(1)}°C). Prioritize cooling or shading there.`);
+            }
+        }
+
+        // Find driest node
+        let driestNode = null, driestAvg = Infinity;
+        nodeEntries.forEach(([nodeId, data]) => {
+            const stats = this.computeStats(data.hums);
+            if (stats && stats.avg < driestAvg) {
+                driestAvg = stats.avg;
+                driestNode = nodeId;
+            }
+        });
+        if (driestNode && driestAvg < 50) {
+            const node = this.nodes.find(n => n.id === driestNode);
+            const label = node ? node.location : driestNode;
+            recs.push(`${label} has low average humidity (${driestAvg.toFixed(1)}%). Schedule irrigation soon.`);
+        }
+
+        // Anomaly-driven recommendations
+        const dangerAnomalies = anomalies.filter(a => a.severity === 'danger');
+        const silenceAnomalies = anomalies.filter(a => a.severity === 'info');
+
+        if (dangerAnomalies.length > 0) {
+            recs.push(`${dangerAnomalies.length} severe spike(s) detected. Inspect affected nodes for sensor exposure or heat events.`);
+        }
+        if (silenceAnomalies.length > 0) {
+            recs.push(`${silenceAnomalies.length} node silence gap(s) found. Confirm device uptime and Wi-Fi connectivity.`);
+        }
+
+        return recs.slice(0, 5); // cap at 5
+    }
+
+    // ── EXISTING HELPERS (kept for forecast / heat index) ─────────────────────
     describeTrend(current, previous) {
         if (previous === null || previous === undefined) return { label: 'steady', arrow: '→' };
         if (current > previous) return { label: 'rising', arrow: '↑' };
@@ -558,57 +691,12 @@ class AgricultureDashboard {
     }
 
     getHeatIndexCategory(avgTempC) {
-        if (avgTempC === null || avgTempC === undefined || !Number.isFinite(avgTempC)) {
-            return {
-                key: 'unknown',
-                label: '--',
-                range: '',
-                effect: 'Waiting for temperature data.'
-            };
-        }
-
-        if (avgTempC < 27) {
-            return {
-                key: 'normal',
-                label: 'Normal',
-                range: '< 27°C / < 80°F',
-                effect: 'Minimal heat stress expected for most people.'
-            };
-        }
-
-        if (avgTempC >= 27 && avgTempC < 32) {
-            return {
-                key: 'caution',
-                label: 'Caution',
-                range: '27–32°C / 80–90°F',
-                effect: 'Fatigue possible with prolonged exposure and activity.'
-            };
-        }
-
-        if (avgTempC >= 32 && avgTempC < 39) {
-            return {
-                key: 'extreme-caution',
-                label: 'Extreme Caution',
-                range: '32–39°C / 90–103°F',
-                effect: 'Heat cramps and heat exhaustion possible.'
-            };
-        }
-
-        if (avgTempC >= 39 && avgTempC < 52) {
-            return {
-                key: 'danger',
-                label: 'Danger',
-                range: '39–51°C / 103–124°F',
-                effect: 'Heat cramps and heat exhaustion likely; heat stroke possible with prolonged activity.'
-            };
-        }
-
-        return {
-            key: 'extreme-danger',
-            label: 'Extreme Danger',
-            range: '≥ 52°C / ≥ 125°F',
-            effect: 'Heat stroke highly likely with continued exposure.'
-        };
+        if (!Number.isFinite(avgTempC)) return { key: 'unknown', label: '--', range: '', effect: 'Waiting for temperature data.' };
+        if (avgTempC < 27) return { key: 'normal', label: 'Normal', range: '< 27°C / < 80°F', effect: 'Minimal heat stress expected for most people.' };
+        if (avgTempC < 32) return { key: 'caution', label: 'Caution', range: '27–32°C / 80–90°F', effect: 'Fatigue possible with prolonged exposure and activity.' };
+        if (avgTempC < 39) return { key: 'extreme-caution', label: 'Extreme Caution', range: '32–39°C / 90–103°F', effect: 'Heat cramps and heat exhaustion possible.' };
+        if (avgTempC < 52) return { key: 'danger', label: 'Danger', range: '39–51°C / 103–124°F', effect: 'Heat cramps and exhaustion likely; heat stroke possible.' };
+        return { key: 'extreme-danger', label: 'Extreme Danger', range: '≥ 52°C / ≥ 125°F', effect: 'Heat stroke highly likely with continued exposure.' };
     }
 
     getHistoryValues(type, limit) {
@@ -623,215 +711,206 @@ class AgricultureDashboard {
                     value = row.value;
                 }
             }
-
-            if (value === null || value === undefined) {
-                if (type === 'temperature') {
-                    value = row.temperature ?? row.temp ?? null;
-                } else {
-                    value = row.humidity ?? row.hum ?? null;
-                }
-            }
-
             const numeric = Number(value);
-            if (Number.isFinite(numeric)) {
-                values.push(numeric);
-            }
+            if (Number.isFinite(numeric)) values.push(numeric);
         }
-
         return values.reverse();
     }
 
-    calculateEmaSeries(values, alpha) {
-        if (!values || values.length === 0) return [];
-        let ema = values[0];
-        const series = [ema];
-        for (let i = 1; i < values.length; i++) {
-            ema = alpha * values[i] + (1 - alpha) * ema;
-            series.push(ema);
-        }
-        return series;
-    }
-
-    calculateStdDev(values) {
-        if (!values || values.length === 0) return 0;
-        const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-        const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-        return Math.sqrt(variance);
-    }
-
-    buildEmaForecast(values, steps, options = {}) {
+    buildForecast(values, hours, options = {}) {
         if (!values || values.length < this.analyticsMinHistoryPoints) return null;
-
-        const { clampMin = null, clampMax = null, window = 12, emaWindow = 6 } = options;
-        const alpha = 2 / (emaWindow + 1);
-        const emaSeries = this.calculateEmaSeries(values, alpha);
-        const lastEma = emaSeries[emaSeries.length - 1];
-        const prevEma = emaSeries.length > 1 ? emaSeries[emaSeries.length - 2] : lastEma;
-        const slope = lastEma - prevEma;
-
+        const { clampMin = null, clampMax = null } = options;
+        const recent = values.slice(-Math.min(values.length, 3));
+        const avgRecent = recent.reduce((a, v) => a + v, 0) / recent.length;
+        const slope = (values[values.length - 1] - values[0]) / Math.max(values.length - 1, 1);
+        const last = values[values.length - 1];
         const forecast = [];
-        for (let step = 1; step <= steps; step++) {
-            let projected = lastEma + slope * step;
-            if (clampMin !== null) projected = Math.max(clampMin, projected);
-            if (clampMax !== null) projected = Math.min(clampMax, projected);
-            forecast.push(projected);
+        for (let h = 1; h <= hours; h++) {
+            let predicted = last + slope * h;
+            predicted = predicted * 0.65 + avgRecent * 0.35;
+            if (clampMin !== null) predicted = Math.max(clampMin, predicted);
+            if (clampMax !== null) predicted = Math.min(clampMax, predicted);
+            forecast.push(Number(predicted.toFixed(1)));
         }
-
-        const recent = values.slice(-Math.min(values.length, window));
-        const std = this.calculateStdDev(recent);
-        let rangeMin = lastEma - std;
-        let rangeMax = lastEma + std;
-        if (clampMin !== null) rangeMin = Math.max(clampMin, rangeMin);
-        if (clampMax !== null) rangeMax = Math.min(clampMax, rangeMax);
-
-        return {
-            ema: lastEma,
-            slope,
-            forecast,
-            rangeMin,
-            rangeMax,
-            alpha,
-            window: recent.length
-        };
+        return forecast;
     }
 
-    buildRecommendations(categoryKey, forecastPeak, avgHum) {
-        const recommendations = [];
-
-        if (categoryKey === 'normal') {
-            recommendations.push('Maintain routine field operations with normal hydration breaks.');
-            recommendations.push('Keep monitoring sensors for sudden changes or localized hotspots.');
-            recommendations.push('Inspect shade cover and irrigation readiness before midday peaks.');
-        } else if (categoryKey === 'caution') {
-            recommendations.push('Limit prolonged outdoor work; schedule brief shade breaks every hour.');
-            recommendations.push('Hydrate regularly and monitor for early fatigue or dizziness.');
-            recommendations.push('Shift irrigation or spraying to early morning or evening hours.');
-        } else if (categoryKey === 'extreme-caution') {
-            recommendations.push('Reduce strenuous activity and rotate crews more frequently.');
-            recommendations.push('Monitor for heat cramps or exhaustion and respond quickly.');
-            recommendations.push('Run ventilation, fans, or misting during the hottest hours.');
-        } else if (categoryKey === 'danger') {
-            recommendations.push('Avoid heavy labor during peak heat; reschedule if possible.');
-            recommendations.push('Set up cooling stations and check on vulnerable individuals.');
-            recommendations.push('Trigger alerts for field supervisors and confirm sensor uptime.');
-        } else if (categoryKey === 'extreme-danger') {
-            recommendations.push('Suspend non-essential outdoor work during peak hours.');
-            recommendations.push('Activate heat emergency protocols and broadcast alerts.');
-            recommendations.push('Provide immediate access to cooling shelters and water.');
-        }
-
-        if (Number.isFinite(forecastPeak) && forecastPeak >= 39) {
-            recommendations.push('Prepare cooling measures ahead of the forecasted peak.');
-        }
-
-        if (Number.isFinite(forecastPeak) && forecastPeak >= 52) {
-            recommendations.push('Escalate to emergency response and restrict exposure.');
-        }
-
-        if (Number.isFinite(avgHum) && avgHum >= 80) {
-            recommendations.push('Increase ventilation to reduce humidity buildup in enclosed areas.');
-        }
-
-        return recommendations;
-    }
-
+    // ── MAIN ANALYTICS RENDER ─────────────────────────────────────────────────
     renderAnalytics() {
-        if (!this.analyticsCategory || !this.analyticsEffects || !this.analyticsSummary) return;
-
-        const tempValues = this.getNumericNodeValues('temp');
-        const humValues = this.getNumericNodeValues('hum');
-        const tempStats = this.calculateStats(tempValues);
-        const humStats = this.calculateStats(humValues);
+        if (!this.analyticsCategory) return;
 
         if (this.analyticsUpdated) {
             this.analyticsUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
         }
 
-        if (!tempStats) {
+        // --- GROUP RAW DATA BY NODE ---
+        const groups = this.groupRowsByNode();
+        const hasData = Object.keys(groups).length > 0;
+
+        // --- 1. INTERPRETATION (global avg from historyRows, not just current nodes) ---
+        const allTemps = Object.values(groups).flatMap(g => g.temps);
+        const allHums = Object.values(groups).flatMap(g => g.hums);
+        const globalTempStats = this.computeStats(allTemps);
+        const globalHumStats = this.computeStats(allHums);
+
+        if (!globalTempStats) {
             this.analyticsCategory.textContent = '--';
             this.analyticsCategory.className = 'analytics-badge';
             this.analyticsEffects.textContent = 'Waiting for temperature data.';
-            this.analyticsSummary.textContent = 'Insufficient data to generate descriptive analytics.';
-            this.forecastMeta.textContent = 'Awaiting history...';
-            this.forecastTempValue.textContent = '--';
-            this.forecastTempRange.textContent = '--';
-            this.forecastTempStep1.textContent = '+1: --';
-            this.forecastTempStep2.textContent = '+2: --';
-            this.forecastTempStep3.textContent = '+3: --';
-            this.forecastTempTrend.textContent = 'EMA trend: --';
-            this.forecastHumValue.textContent = '--';
-            this.forecastHumRange.textContent = '--';
-            this.forecastHumStep1.textContent = '+1: --';
-            this.forecastHumStep2.textContent = '+2: --';
-            this.forecastHumStep3.textContent = '+3: --';
-            this.forecastHumTrend.textContent = 'EMA trend: --';
-            this.recommendList.innerHTML = '<li class="muted">Waiting for readings...</li>';
-            return;
+            this.analyticsSummary.textContent = 'Load history or wait for readings.';
+        } else {
+            const tempTrend = this.describeTrend(globalTempStats.avg, this.prevAnalyticsTemp);
+            this.prevAnalyticsTemp = globalTempStats.avg;
+            const humTrend = globalHumStats ? this.describeTrend(globalHumStats.avg, this.prevAnalyticsHum) : null;
+            this.prevAnalyticsHum = globalHumStats ? globalHumStats.avg : this.prevAnalyticsHum;
+
+            const category = this.getHeatIndexCategory(globalTempStats.avg);
+            this.analyticsCategory.textContent = `${category.label} (${category.range})`;
+            this.analyticsCategory.className = `analytics-badge ${category.key}`;
+            this.analyticsEffects.textContent = category.effect;
+
+            const summaryParts = [
+                `Temp avg ${globalTempStats.avg.toFixed(1)}°C (${tempTrend.label}), min ${globalTempStats.min.toFixed(1)}°C, max ${globalTempStats.max.toFixed(1)}°C`
+            ];
+            if (globalHumStats) {
+                summaryParts.push(
+                    `Hum avg ${globalHumStats.avg.toFixed(1)}% (${humTrend ? humTrend.label : 'steady'}), min ${globalHumStats.min.toFixed(1)}%, max ${globalHumStats.max.toFixed(1)}%`
+                );
+            }
+            this.analyticsSummary.textContent = summaryParts.join(' | ');
         }
 
-        const tempTrend = this.describeTrend(tempStats.avg, this.prevAnalyticsTemp);
-        this.prevAnalyticsTemp = tempStats.avg;
-        const humTrend = humStats ? this.describeTrend(humStats.avg, this.prevAnalyticsHum) : null;
-        this.prevAnalyticsHum = humStats ? humStats.avg : this.prevAnalyticsHum;
-
-
-        const category = this.getHeatIndexCategory(tempStats.avg);
-        this.analyticsCategory.textContent = `${category.label} (${category.range})`;
-        this.analyticsCategory.className = `analytics-badge ${category.key}`;
-        this.analyticsEffects.textContent = category.effect;
-
-        const summaryParts = [
-            `Temp avg ${tempStats.avg.toFixed(1)}°C (${tempTrend.label}), min ${tempStats.min.toFixed(1)}°C, max ${tempStats.max.toFixed(1)}°C`
-        ];
-        if (humStats) {
-            summaryParts.push(
-                `Hum avg ${humStats.avg.toFixed(1)}% (${humTrend ? humTrend.label : 'steady'}), min ${humStats.min.toFixed(1)}%, max ${humStats.max.toFixed(1)}%`
-            );
-        }
-        this.analyticsSummary.textContent = summaryParts.join(' | ');
-
+        // --- 2. FORECAST (unchanged from v7, still useful) ---
         const tempHistory = this.getHistoryValues('temperature', 48);
         const humHistory = this.getHistoryValues('humidity', 48);
-        const tempForecast = this.buildEmaForecast(tempHistory, 3);
-        const humForecast = this.buildEmaForecast(humHistory, 3, { clampMin: 0, clampMax: 100 });
+        const tempForecast = this.buildForecast(tempHistory, this.analyticsForecastHours);
+        const humForecast = this.buildForecast(humHistory, this.analyticsForecastHours, { clampMin: 0, clampMax: 100 });
 
+        this.forecastList.innerHTML = '';
         if (!tempForecast || !humForecast) {
             this.forecastMeta.textContent = 'Awaiting enough history to forecast.';
-            this.forecastTempValue.textContent = '--';
-            this.forecastTempRange.textContent = '--';
-            this.forecastTempStep1.textContent = '+1: --';
-            this.forecastTempStep2.textContent = '+2: --';
-            this.forecastTempStep3.textContent = '+3: --';
-            this.forecastTempTrend.textContent = 'EMA trend: --';
-            this.forecastHumValue.textContent = '--';
-            this.forecastHumRange.textContent = '--';
-            this.forecastHumStep1.textContent = '+1: --';
-            this.forecastHumStep2.textContent = '+2: --';
-            this.forecastHumStep3.textContent = '+3: --';
-            this.forecastHumTrend.textContent = 'EMA trend: --';
+            this.forecastList.innerHTML = '<tr><td class="forecast-empty" colspan="3">Insufficient data for forecast.</td></tr>';
         } else {
-            const tempTrendLabel = tempForecast.slope > 0 ? 'rising' : tempForecast.slope < 0 ? 'falling' : 'steady';
-            const humTrendLabel = humForecast.slope > 0 ? 'rising' : humForecast.slope < 0 ? 'falling' : 'steady';
-
-            this.forecastMeta.textContent = `EMA alpha ${tempForecast.alpha.toFixed(2)} | +/- range from last ${tempForecast.window} readings`;
-
-            this.forecastTempValue.textContent = `${tempForecast.ema.toFixed(1)}°C`;
-            this.forecastTempRange.textContent = `${tempForecast.rangeMin.toFixed(1)} - ${tempForecast.rangeMax.toFixed(1)}°C`;
-            this.forecastTempStep1.textContent = `+1: ${tempForecast.forecast[0].toFixed(1)}°C`;
-            this.forecastTempStep2.textContent = `+2: ${tempForecast.forecast[1].toFixed(1)}°C`;
-            this.forecastTempStep3.textContent = `+3: ${tempForecast.forecast[2].toFixed(1)}°C`;
-            this.forecastTempTrend.textContent = `EMA trend is ${tempTrendLabel} (delta ${tempForecast.slope.toFixed(2)}/step)`;
-
-            this.forecastHumValue.textContent = `${humForecast.ema.toFixed(1)}%`;
-            this.forecastHumRange.textContent = `${humForecast.rangeMin.toFixed(1)} - ${humForecast.rangeMax.toFixed(1)}%`;
-            this.forecastHumStep1.textContent = `+1: ${humForecast.forecast[0].toFixed(1)}%`;
-            this.forecastHumStep2.textContent = `+2: ${humForecast.forecast[1].toFixed(1)}%`;
-            this.forecastHumStep3.textContent = `+3: ${humForecast.forecast[2].toFixed(1)}%`;
-            this.forecastHumTrend.textContent = `EMA trend is ${humTrendLabel} (delta ${humForecast.slope.toFixed(2)}/step)`;
+            const now = new Date();
+            for (let i = 0; i < this.analyticsForecastHours; i++) {
+                const hour = new Date(now.getTime() + (i + 1) * 3600000);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                    <td>${tempForecast[i].toFixed(1)}°C</td>
+                    <td>${humForecast[i].toFixed(1)}%</td>
+                `;
+                this.forecastList.appendChild(row);
+            }
+            const peakTemp = Math.max(...tempForecast);
+            const peakHum = Math.max(...humForecast);
+            this.forecastMeta.textContent = `Peak temp ${peakTemp.toFixed(1)}°C | Peak hum ${peakHum.toFixed(1)}%`;
         }
 
-        const peakTemp = tempForecast ? Math.max(...tempForecast.forecast) : null;
-        const recs = this.buildRecommendations(category.key, peakTemp, humStats ? humStats.avg : null);
+        // --- 3. PER-NODE STATS ---
+        if (this.nodeStatsBody) {
+            this.nodeStatsBody.innerHTML = '';
+            if (!hasData) {
+                this.nodeStatsBody.innerHTML = '<tr><td colspan="6" class="forecast-empty">Load history to see per-node stats.</td></tr>';
+            } else {
+                this.nodes.forEach(node => {
+                    const data = groups[node.id];
+                    const tempStats = data ? this.computeStats(data.temps) : null;
+                    const humStats = data ? this.computeStats(data.hums) : null;
+
+                    const tempTrend = tempStats
+                        ? (tempStats.avg > tempStats.min + (tempStats.max - tempStats.min) * 0.66 ? '↑' : '→')
+                        : '--';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><span class="sensor-id">${node.id}</span></td>
+                        <td>${node.location}</td>
+                        <td>${tempStats ? tempStats.avg.toFixed(1) + '°C' : '--'}</td>
+                        <td>${tempStats ? tempStats.min.toFixed(1) + ' / ' + tempStats.max.toFixed(1) + '°C' : '--'}</td>
+                        <td>${humStats ? humStats.avg.toFixed(1) + '%' : '--'}</td>
+                        <td>${tempStats ? '<span class="node-trend">' + tempTrend + '</span>' : '--'}</td>
+                    `;
+                    this.nodeStatsBody.appendChild(row);
+                });
+            }
+        }
+
+        // --- 4. ANOMALY DETECTION ---
+        if (this.anomalyLog) {
+            this.anomalyLog.innerHTML = '';
+            if (!hasData) {
+                this.anomalyLog.innerHTML = '<div class="anomaly-empty">Load history to detect anomalies.</div>';
+            } else {
+                const anomalies = this.detectAnomalies(groups);
+                if (anomalies.length === 0) {
+                    this.anomalyLog.innerHTML = '<div class="anomaly-empty anomaly-clear">✓ No anomalies detected in current dataset.</div>';
+                } else {
+                    anomalies.slice(0, 6).forEach(a => {
+                        const item = document.createElement('div');
+                        item.className = `anomaly-item anomaly-${a.severity}`;
+                        item.innerHTML = `
+                            <span class="anomaly-dot"></span>
+                            <div class="anomaly-content">
+                                <div class="anomaly-label">${a.label}</div>
+                                <div class="anomaly-detail">${a.detail}</div>
+                            </div>
+                        `;
+                        this.anomalyLog.appendChild(item);
+                    });
+                }
+            }
+        }
+
+        // --- 5. CORRELATION ---
+        if (this.corrBody) {
+            this.corrBody.innerHTML = '';
+            if (!hasData) {
+                this.corrBody.innerHTML = '<div class="anomaly-empty">Load history to compute correlation.</div>';
+            } else {
+                this.nodes.forEach(node => {
+                    const data = groups[node.id];
+                    if (!data) return;
+
+                    // Pair up temps and hums by matching index length
+                    const n = Math.min(data.temps.length, data.hums.length);
+                    if (n < 3) return;
+
+                    const r = this.pearsonCorrelation(data.temps.slice(-n), data.hums.slice(-n));
+                    const { text, cls } = this.describeCorrelation(r);
+                    const rVal = r !== null ? r.toFixed(2) : 'N/A';
+                    const pct = r !== null ? Math.abs(r) * 100 : 0;
+
+                    const row = document.createElement('div');
+                    row.className = 'corr-row';
+                    row.innerHTML = `
+                        <div class="corr-header">
+                            <span class="corr-node">${node.location}</span>
+                            <span class="corr-val ${cls}">${rVal}</span>
+                        </div>
+                        <div class="corr-track">
+                            <div class="corr-fill ${cls}" style="width: ${pct.toFixed(1)}%"></div>
+                        </div>
+                        <div class="corr-desc">${text} — ${r !== null && r < 0 ? 'hotter → lower humidity' : 'temp and humidity move together'}</div>
+                    `;
+                    this.corrBody.appendChild(row);
+                });
+
+                if (this.corrBody.innerHTML === '') {
+                    this.corrBody.innerHTML = '<div class="anomaly-empty">Need ≥ 3 paired readings per node.</div>';
+                }
+            }
+        }
+
+        // --- 6. RECOMMENDATIONS (data-driven) ---
+        const categoryKey = globalTempStats
+            ? this.getHeatIndexCategory(globalTempStats.avg).key
+            : 'normal';
+        const anomalies = hasData ? this.detectAnomalies(groups) : [];
+        const recs = hasData
+            ? this.buildDataDrivenRecommendations(groups, anomalies, categoryKey)
+            : ['Load history or wait for readings to generate recommendations.'];
+
         this.recommendList.innerHTML = '';
         recs.forEach(rec => {
             const item = document.createElement('li');
@@ -887,7 +966,6 @@ class AgricultureDashboard {
             <span class="log-feed">${feedName}</span>
             <span class="log-val">${value.toFixed(1)}${unit}</span>
         `;
-
         this.logContent.appendChild(entry);
         this.logContent.scrollTop = this.logContent.scrollHeight;
 
@@ -906,7 +984,6 @@ class AgricultureDashboard {
             <span class="log-ts">[${new Date().toLocaleTimeString()}]</span>
             <span class="log-sys">${msg}</span>
         `;
-
         this.logContent.appendChild(entry);
         this.logContent.scrollTop = this.logContent.scrollHeight;
     }
@@ -918,7 +995,6 @@ class AgricultureDashboard {
     // ── STATS ─────────────────────────────────────────────────────────────────
     updateStats() {
         if (!this.startTime) return;
-
         const activeNum = this.nodes.filter(n => n.status === 'transmitting').length;
         this.activeFeeds.textContent = activeNum;
 
@@ -941,23 +1017,23 @@ class AgricultureDashboard {
         this.uptimeInterval = setInterval(() => {
             if (!this.startTime) return;
             const ms = Date.now() - this.startTime.getTime();
-            const h  = Math.floor(ms / 3600000);
-            const m  = Math.floor((ms % 3600000) / 60000);
-            const s  = Math.floor((ms % 60000) / 1000);
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
             this.uptimeEl.textContent =
-                `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         }, 1000);
     }
 
-    // ── LOAD HISTORY VIA REST API ─────────────────────────────────────────────
+    // ── LOAD HISTORY ──────────────────────────────────────────────────────────
     async loadHistory() {
         this.loadHistoryBtn.disabled = true;
         this.loadHistoryBtn.textContent = 'Loading…';
 
         try {
-            // Use Supabase REST API to fetch historical logs
+            // FIX 1: Change .asc to .desc to pull the most recent 500 readings from the database
             const response = await fetch(
-                `${this.SUPABASE_URL}/rest/v1/sensor_logs?order=created_at.asc&limit=100`,
+                `${this.SUPABASE_URL}/rest/v1/sensor_logs?order=created_at.desc&limit=500`,
                 {
                     headers: {
                         'apikey': this.SUPABASE_ANON_KEY,
@@ -967,7 +1043,13 @@ class AgricultureDashboard {
             );
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
+            
+            let rawData = await response.json();
+            
+            // FIX 2: Supabase gave us newest-first. We must reverse it so our charts 
+            // and analytics process it chronologically (oldest to newest)
+            const data = rawData.reverse(); 
+            
             this.historyRows = data;
 
             this.historyContent.innerHTML = '';
@@ -981,15 +1063,10 @@ class AgricultureDashboard {
 
             this.hydrateNodesFromHistory(data);
 
-            // Build chart data
             const chartData = { labels: [], tempData: [], humData: [] };
             data.forEach(log => {
                 const timestamp = new Date(log.created_at);
-                const timeStr = timestamp.toLocaleTimeString();
-                chartData.labels.push(timeStr);
-
-                const tempValue = log.temperature ?? log.temp ?? null;
-                const humValue = log.humidity ?? log.hum ?? null;
+                chartData.labels.push(timestamp.toLocaleTimeString());
 
                 if (log.feed_name && log.value !== undefined && log.value !== null) {
                     const { type } = this.parseFeedName(log.feed_name);
@@ -1000,36 +1077,25 @@ class AgricultureDashboard {
                         chartData.tempData.push(null);
                         chartData.humData.push(Number(log.value));
                     } else {
-                        chartData.tempData.push(tempValue !== null ? Number(tempValue) : null);
-                        chartData.humData.push(humValue !== null ? Number(humValue) : null);
+                        chartData.tempData.push(null);
+                        chartData.humData.push(null);
                     }
                 } else {
-                    chartData.tempData.push(tempValue !== null ? Number(tempValue) : null);
-                    chartData.humData.push(humValue !== null ? Number(humValue) : null);
+                    chartData.tempData.push(null);
+                    chartData.humData.push(null);
                 }
-
             });
 
-            // Also display in history list (newest on top)
             data.slice().reverse().forEach(log => {
-                const timestamp = new Date(log.created_at);
-                const tempValue = log.temperature ?? log.temp ?? null;
-                const humValue = log.humidity ?? log.hum ?? null;
                 const entry = document.createElement('div');
                 entry.className = 'history-entry';
-                const dateStr = timestamp.toLocaleString();
                 entry.innerHTML = `
-                    <span class="history-ts">[${dateStr}]</span>
+                    <span class="history-ts">[${new Date(log.created_at).toLocaleString()}]</span>
                     <span class="history-feed">${log.feed_name || 'Sensor row'}</span>
-                    <span class="history-value">${log.value ?? `${tempValue ?? '--'} / ${humValue ?? '--'}`}</span>
+                    <span class="history-value">${log.value ?? '--'}</span>
                 `;
                 this.historyContent.appendChild(entry);
             });
-
-            // Fill missing data points for alignment
-            const maxLength = chartData.labels.length;
-            while (chartData.tempData.length < maxLength) chartData.tempData.push(null);
-            while (chartData.humData.length < maxLength) chartData.humData.push(null);
 
             const maxPoints = 15;
             if (chartData.labels.length > maxPoints) {
@@ -1039,7 +1105,6 @@ class AgricultureDashboard {
             }
 
             this.chartData = chartData;
-
             this.updateChart(chartData);
             this.renderAnalytics();
 
@@ -1052,13 +1117,10 @@ class AgricultureDashboard {
         }
     }
 
-    // ── CHART INITIALIZATION & UPDATE ──────────────────────────────────────────
+    // ── CHART ─────────────────────────────────────────────────────────────────
     updateChart(chartData) {
         const ctx = this.chartCanvas.getContext('2d');
-
-        if (this.sensorChart) {
-            this.sensorChart.destroy();
-        }
+        if (this.sensorChart) this.sensorChart.destroy();
 
         if (chartData.labels && chartData.labels.length > 0) {
             this.sensorChart = new Chart(ctx, {
@@ -1100,10 +1162,7 @@ class AgricultureDashboard {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    },
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
                             display: true,
@@ -1126,60 +1185,31 @@ class AgricultureDashboard {
                     },
                     scales: {
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Temperature (°C)',
-                                color: '#ff6b6b',
-                                font: { size: 12, weight: 'bold' }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            },
-                            ticks: {
-                                color: window.getComputedStyle(document.body).color
-                            }
+                            type: 'linear', display: true, position: 'left',
+                            title: { display: true, text: 'Temperature (°C)', color: '#ff6b6b', font: { size: 12, weight: 'bold' } },
+                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            ticks: { color: window.getComputedStyle(document.body).color }
                         },
                         y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Humidity (%)',
-                                color: '#4ecdc4',
-                                font: { size: 12, weight: 'bold' }
-                            },
-                            grid: {
-                                drawOnChartArea: false
-                            },
-                            ticks: {
-                                color: window.getComputedStyle(document.body).color
-                            }
+                            type: 'linear', display: true, position: 'right',
+                            title: { display: true, text: 'Humidity (%)', color: '#4ecdc4', font: { size: 12, weight: 'bold' } },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: window.getComputedStyle(document.body).color }
                         },
                         x: {
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            },
+                            grid: { color: 'rgba(0,0,0,0.05)' },
                             ticks: {
                                 color: window.getComputedStyle(document.body).color,
-                                maxTicksLimit: 15,
-                                autoSkip: true,
-                                maxRotation: 45,
-                                minRotation: 0
+                                maxTicksLimit: 15, autoSkip: true, maxRotation: 45, minRotation: 0
                             }
                         }
                     }
                 }
             });
-            console.log('[Chart] Updated with', chartData.labels.length, 'data points');
         }
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Expose instance to window for debugging/inspection in DevTools
     window.dashboard = new AgricultureDashboard();
 });

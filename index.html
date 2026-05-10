@@ -113,6 +113,7 @@
 
         <!-- MAIN AREA -->
         <main class="dash-main">
+            <!-- SECTION 1: SENSOR NODES (KPI) -->
             <section class="panel sensor-panel">
                 <div class="panel-header">
                     <h2 class="panel-title">
@@ -152,60 +153,7 @@
                 </div>
             </section>
 
-            <!-- ANALYTICS -->
-            <section class="panel analytics-panel">
-                <div class="panel-header">
-                    <h3 class="panel-title">
-                        <span class="panel-title-icon">📈</span>
-                        Analytics
-                    </h3>
-                    <span class="panel-badge" id="analytics-updated">Waiting…</span>
-                </div>
-                <div class="analytics-grid">
-                    <div class="analytics-card">
-                        <div class="analytics-title">Interpretation</div>
-                        <div class="analytics-badge" id="analytics-category">--</div>
-                        <p class="analytics-effect" id="analytics-effects">Waiting for temperature data.</p>
-                        <div class="analytics-summary" id="analytics-summary">--</div>
-                    </div>
-                    <div class="analytics-card">
-                        <div class="analytics-title">Next-Reading Forecast</div>
-                        <div class="forecast-meta" id="forecast-meta">EMA smoothed +/- range</div>
-                        <div class="forecast-grid">
-                            <div class="forecast-card">
-                                <div class="forecast-label">Temperature</div>
-                                <div class="forecast-value" id="forecast-temp-value">--</div>
-                                <div class="forecast-range" id="forecast-temp-range">--</div>
-                                <div class="forecast-steps">
-                                    <span id="forecast-temp-step1">+1: --</span>
-                                    <span id="forecast-temp-step2">+2: --</span>
-                                    <span id="forecast-temp-step3">+3: --</span>
-                                </div>
-                                <div class="forecast-note" id="forecast-temp-trend">EMA trend: --</div>
-                            </div>
-                            <div class="forecast-card">
-                                <div class="forecast-label">Humidity</div>
-                                <div class="forecast-value" id="forecast-hum-value">--</div>
-                                <div class="forecast-range" id="forecast-hum-range">--</div>
-                                <div class="forecast-steps">
-                                    <span id="forecast-hum-step1">+1: --</span>
-                                    <span id="forecast-hum-step2">+2: --</span>
-                                    <span id="forecast-hum-step3">+3: --</span>
-                                </div>
-                                <div class="forecast-note" id="forecast-hum-trend">EMA trend: --</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="analytics-card">
-                        <div class="analytics-title">Recommendations</div>
-                        <ul class="recommend-list" id="recommend-list">
-                            <li class="muted">Waiting for readings...</li>
-                        </ul>
-                    </div>
-                </div>
-            </section>
-
-            <!-- HISTORY CHART -->
+            <!-- SECTION 2: HISTORY CHART -->
             <section class="panel history-panel history-panel-main">
                 <div class="panel-header">
                     <h3 class="panel-title">
@@ -219,6 +167,7 @@
                 </div>
             </section>
 
+            <!-- SECTION 3: LOCATIONS TABLE -->
             <section class="panel table-panel">
                 <div class="panel-header">
                     <h3 class="panel-title">
@@ -242,6 +191,69 @@
                     </table>
                 </div>
             </section>
+
+            <!-- SECTION 4: ANALYTICS ROW 1 (Interpretation, Forecast, Recommendations) -->
+            <div class="analytics-grid analytics-grid-row-1">
+ 
+                <!-- CARD 1: Interpretation -->
+                <div class="analytics-card">
+                    <div class="analytics-title">Interpretation</div>
+                    <div class="analytics-badge" id="analytics-category">--</div>
+                    <p class="analytics-effect" id="analytics-effects">Waiting for temperature data.</p>
+                    <div class="analytics-summary" id="analytics-summary">--</div>
+                </div>
+ 
+                <!-- CARD 2: Forecast -->
+                <div class="analytics-card">
+                    <div class="analytics-title">Forecast (Next 24 Hours)</div>
+                    <div class="forecast-meta" id="forecast-meta">Awaiting history...</div>
+                    <div class="forecast-scroll">
+                        <table class="forecast-table">
+                            <thead>
+                                <tr>
+                                    <th>Hour</th>
+                                    <th>Temperature</th>
+                                    <th>Humidity</th>
+                                </tr>
+                            </thead>
+                            <tbody id="forecast-list"></tbody>
+                        </table>
+                    </div>
+                </div>
+ 
+                <!-- CARD 3: Recommendations -->
+                <div class="analytics-card">
+                    <div class="analytics-title">Recommendations</div>
+                    <ul class="recommend-list" id="recommend-list">
+                        <li class="muted">Waiting for readings...</li>
+                    </ul>
+                </div>
+ 
+            </div>
+
+            <!-- SECTION 5: ANALYTICS ROW 2 (Anomaly Log, Correlation) -->
+            <div class="analytics-grid analytics-grid-row-2">
+ 
+                <!-- CARD 1: Anomaly Log -->
+                <div class="analytics-card">
+                    <div class="analytics-title">Anomaly Log</div>
+                    <div class="anomaly-log" id="anomaly-log">
+                        <div class="anomaly-empty">Load history to detect anomalies.</div>
+                    </div>
+                </div>
+ 
+                <!-- CARD 2: Temp–Humidity Correlation -->
+                <div class="analytics-card">
+                    <div class="analytics-title">Temp–Humidity Correlation</div>
+                    <div class="analytics-summary" style="margin-bottom: 10px;">
+                        Higher r = stronger relationship. Negative = hotter → drier.
+                    </div>
+                    <div id="corr-body">
+                        <div class="anomaly-empty">Load history to compute correlation.</div>
+                    </div>
+                </div>
+ 
+            </div>
         </main>
 
         <!-- SIDEBAR -->
