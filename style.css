@@ -110,6 +110,7 @@
    ============================ */
 html, body {
     height: 100%;
+    overflow-x: hidden;
 }
 
 body {
@@ -1258,12 +1259,20 @@ body {
 
 @media (max-width: 600px) {
     .topbar {
-        padding: 0 14px;
+        padding: 0 16px;
     }
 
     .dash-layout {
-        padding: 14px;
-        gap: 14px;
+        /* Removes the outer gap so panels sit flush against the phone screen */
+        padding: 0; 
+        gap: 12px;
+    }
+
+    .panel, .analytics-card {
+        /* Removes curved borders on the edges for a native app feel */
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
     }
 
     .login-card {
@@ -1271,20 +1280,29 @@ body {
     }
 
     .sensor-table th,
-    .sensor-table td {
+    .sensor-table td,
+    .forecast-table th,
+    .forecast-table td {
         padding: 10px 12px;
+        white-space: nowrap; /* Prevents text from squishing too much */
     }
 
     .kpi-row {
         grid-template-columns: 1fr;
-        padding: 12px 14px;
+        padding: 16px;
         gap: 10px;
     }
 
     .analytics-grid {
         grid-template-columns: 1fr;
-        padding: 12px 14px;
+        padding: 0;
         gap: 12px;
+    }
+    
+    .forecast-scroll {
+        /* Allows the forecast table to be swiped horizontally without moving the whole page */
+        overflow-x: auto; 
+        -webkit-overflow-scrolling: touch;
     }
 }
 
