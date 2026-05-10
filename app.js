@@ -102,7 +102,18 @@ class AgricultureDashboard {
         this.analyticsEffects = document.getElementById('analytics-effects');
         this.analyticsSummary = document.getElementById('analytics-summary');
         this.forecastMeta = document.getElementById('forecast-meta');
-        this.forecastList = document.getElementById('forecast-list');
+        this.forecastTempValue = document.getElementById('forecast-temp-value');
+        this.forecastTempRange = document.getElementById('forecast-temp-range');
+        this.forecastTempStep1 = document.getElementById('forecast-temp-step1');
+        this.forecastTempStep2 = document.getElementById('forecast-temp-step2');
+        this.forecastTempStep3 = document.getElementById('forecast-temp-step3');
+        this.forecastTempTrend = document.getElementById('forecast-temp-trend');
+        this.forecastHumValue = document.getElementById('forecast-hum-value');
+        this.forecastHumRange = document.getElementById('forecast-hum-range');
+        this.forecastHumStep1 = document.getElementById('forecast-hum-step1');
+        this.forecastHumStep2 = document.getElementById('forecast-hum-step2');
+        this.forecastHumStep3 = document.getElementById('forecast-hum-step3');
+        this.forecastHumTrend = document.getElementById('forecast-hum-trend');
         this.recommendList = document.getElementById('recommend-list');
     }
 
@@ -630,28 +641,58 @@ class AgricultureDashboard {
         return values.reverse();
     }
 
-    buildForecast(values, hours, options = {}) {
+    calculateEmaSeries(values, alpha) {
+        if (!values || values.length === 0) return [];
+        let ema = values[0];
+        const series = [ema];
+        for (let i = 1; i < values.length; i++) {
+            ema = alpha * values[i] + (1 - alpha) * ema;
+            series.push(ema);
+        }
+        return series;
+    }
+
+    calculateStdDev(values) {
+        if (!values || values.length === 0) return 0;
+        const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+        const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+        return Math.sqrt(variance);
+    }
+
+    buildEmaForecast(values, steps, options = {}) {
         if (!values || values.length < this.analyticsMinHistoryPoints) return null;
 
-        const { clampMin = null, clampMax = null } = options;
-        const recent = values.slice(-Math.min(values.length, 3));
-        const avgRecent = recent.reduce((acc, val) => acc + val, 0) / recent.length;
-        const first = values[0];
-        const last = values[values.length - 1];
-        const slope = (last - first) / Math.max(values.length - 1, 1);
+        const { clampMin = null, clampMax = null, window = 12, emaWindow = 6 } = options;
+        const alpha = 2 / (emaWindow + 1);
+        const emaSeries = this.calculateEmaSeries(values, alpha);
+        const lastEma = emaSeries[emaSeries.length - 1];
+        const prevEma = emaSeries.length > 1 ? emaSeries[emaSeries.length - 2] : lastEma;
+        const slope = lastEma - prevEma;
 
         const forecast = [];
-        for (let hour = 1; hour <= hours; hour++) {
-            let predicted = last + slope * hour;
-            predicted = (predicted * 0.65) + (avgRecent * 0.35);
-
-            if (clampMin !== null) predicted = Math.max(clampMin, predicted);
-            if (clampMax !== null) predicted = Math.min(clampMax, predicted);
-
-            forecast.push(Number(predicted.toFixed(1)));
+        for (let step = 1; step <= steps; step++) {
+            let projected = lastEma + slope * step;
+            if (clampMin !== null) projected = Math.max(clampMin, projected);
+            if (clampMax !== null) projected = Math.min(clampMax, projected);
+            forecast.push(projected);
         }
 
-        return forecast;
+        const recent = values.slice(-Math.min(values.length, window));
+        const std = this.calculateStdDev(recent);
+        let rangeMin = lastEma - std;
+        let rangeMax = lastEma + std;
+        if (clampMin !== null) rangeMin = Math.max(clampMin, rangeMin);
+        if (clampMax !== null) rangeMax = Math.min(clampMax, rangeMax);
+
+        return {
+            ema: lastEma,
+            slope,
+            forecast,
+            rangeMin,
+            rangeMax,
+            alpha,
+            window: recent.length
+        };
     }
 
     buildRecommendations(categoryKey, forecastPeak, avgHum) {
@@ -712,7 +753,18 @@ class AgricultureDashboard {
             this.analyticsEffects.textContent = 'Waiting for temperature data.';
             this.analyticsSummary.textContent = 'Insufficient data to generate descriptive analytics.';
             this.forecastMeta.textContent = 'Awaiting history...';
-            this.forecastList.innerHTML = '<tr><td class="forecast-empty" colspan="3">Insufficient data for forecast.</td></tr>';
+            this.forecastTempValue.textContent = '--';
+            this.forecastTempRange.textContent = '--';
+            this.forecastTempStep1.textContent = '+1: --';
+            this.forecastTempStep2.textContent = '+2: --';
+            this.forecastTempStep3.textContent = '+3: --';
+            this.forecastTempTrend.textContent = 'EMA trend: --';
+            this.forecastHumValue.textContent = '--';
+            this.forecastHumRange.textContent = '--';
+            this.forecastHumStep1.textContent = '+1: --';
+            this.forecastHumStep2.textContent = '+2: --';
+            this.forecastHumStep3.textContent = '+3: --';
+            this.forecastHumTrend.textContent = 'EMA trend: --';
             this.recommendList.innerHTML = '<li class="muted">Waiting for readings...</li>';
             return;
         }
@@ -740,32 +792,45 @@ class AgricultureDashboard {
 
         const tempHistory = this.getHistoryValues('temperature', 48);
         const humHistory = this.getHistoryValues('humidity', 48);
-        const tempForecast = this.buildForecast(tempHistory, this.analyticsForecastHours);
-        const humForecast = this.buildForecast(humHistory, this.analyticsForecastHours, { clampMin: 0, clampMax: 100 });
+        const tempForecast = this.buildEmaForecast(tempHistory, 3);
+        const humForecast = this.buildEmaForecast(humHistory, 3, { clampMin: 0, clampMax: 100 });
 
-        this.forecastList.innerHTML = '';
         if (!tempForecast || !humForecast) {
             this.forecastMeta.textContent = 'Awaiting enough history to forecast.';
-            this.forecastList.innerHTML = '<tr><td class="forecast-empty" colspan="3">Insufficient data for forecast.</td></tr>';
+            this.forecastTempValue.textContent = '--';
+            this.forecastTempRange.textContent = '--';
+            this.forecastTempStep1.textContent = '+1: --';
+            this.forecastTempStep2.textContent = '+2: --';
+            this.forecastTempStep3.textContent = '+3: --';
+            this.forecastTempTrend.textContent = 'EMA trend: --';
+            this.forecastHumValue.textContent = '--';
+            this.forecastHumRange.textContent = '--';
+            this.forecastHumStep1.textContent = '+1: --';
+            this.forecastHumStep2.textContent = '+2: --';
+            this.forecastHumStep3.textContent = '+3: --';
+            this.forecastHumTrend.textContent = 'EMA trend: --';
         } else {
-            const now = new Date();
-            for (let i = 0; i < this.analyticsForecastHours; i++) {
-                const hour = new Date(now.getTime() + (i + 1) * 3600000);
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${hour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                    <td>${tempForecast[i].toFixed(1)}°C</td>
-                    <td>${humForecast[i].toFixed(1)}%</td>
-                `;
-                this.forecastList.appendChild(row);
-            }
+            const tempTrendLabel = tempForecast.slope > 0 ? 'rising' : tempForecast.slope < 0 ? 'falling' : 'steady';
+            const humTrendLabel = humForecast.slope > 0 ? 'rising' : humForecast.slope < 0 ? 'falling' : 'steady';
 
-            const peakTemp = Math.max(...tempForecast);
-            const peakHum = Math.max(...humForecast);
-            this.forecastMeta.textContent = `Peak temp ${peakTemp.toFixed(1)}°C | Peak hum ${peakHum.toFixed(1)}%`;
+            this.forecastMeta.textContent = `EMA alpha ${tempForecast.alpha.toFixed(2)} | +/- range from last ${tempForecast.window} readings`;
+
+            this.forecastTempValue.textContent = `${tempForecast.ema.toFixed(1)}°C`;
+            this.forecastTempRange.textContent = `${tempForecast.rangeMin.toFixed(1)} - ${tempForecast.rangeMax.toFixed(1)}°C`;
+            this.forecastTempStep1.textContent = `+1: ${tempForecast.forecast[0].toFixed(1)}°C`;
+            this.forecastTempStep2.textContent = `+2: ${tempForecast.forecast[1].toFixed(1)}°C`;
+            this.forecastTempStep3.textContent = `+3: ${tempForecast.forecast[2].toFixed(1)}°C`;
+            this.forecastTempTrend.textContent = `EMA trend is ${tempTrendLabel} (delta ${tempForecast.slope.toFixed(2)}/step)`;
+
+            this.forecastHumValue.textContent = `${humForecast.ema.toFixed(1)}%`;
+            this.forecastHumRange.textContent = `${humForecast.rangeMin.toFixed(1)} - ${humForecast.rangeMax.toFixed(1)}%`;
+            this.forecastHumStep1.textContent = `+1: ${humForecast.forecast[0].toFixed(1)}%`;
+            this.forecastHumStep2.textContent = `+2: ${humForecast.forecast[1].toFixed(1)}%`;
+            this.forecastHumStep3.textContent = `+3: ${humForecast.forecast[2].toFixed(1)}%`;
+            this.forecastHumTrend.textContent = `EMA trend is ${humTrendLabel} (delta ${humForecast.slope.toFixed(2)}/step)`;
         }
 
-        const peakTemp = tempForecast ? Math.max(...tempForecast) : null;
+        const peakTemp = tempForecast ? Math.max(...tempForecast.forecast) : null;
         const recs = this.buildRecommendations(category.key, peakTemp, humStats ? humStats.avg : null);
         this.recommendList.innerHTML = '';
         recs.forEach(rec => {

@@ -169,19 +169,31 @@
                         <div class="analytics-summary" id="analytics-summary">--</div>
                     </div>
                     <div class="analytics-card">
-                        <div class="analytics-title">Forecast (Next 24 Hours)</div>
-                        <div class="forecast-meta" id="forecast-meta">Awaiting history...</div>
-                        <div class="forecast-scroll">
-                            <table class="forecast-table">
-                                <thead>
-                                    <tr>
-                                        <th>Hour</th>
-                                        <th>Temperature</th>
-                                        <th>Humidity</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="forecast-list"></tbody>
-                            </table>
+                        <div class="analytics-title">Next-Reading Forecast</div>
+                        <div class="forecast-meta" id="forecast-meta">EMA smoothed +/- range</div>
+                        <div class="forecast-grid">
+                            <div class="forecast-card">
+                                <div class="forecast-label">Temperature</div>
+                                <div class="forecast-value" id="forecast-temp-value">--</div>
+                                <div class="forecast-range" id="forecast-temp-range">--</div>
+                                <div class="forecast-steps">
+                                    <span id="forecast-temp-step1">+1: --</span>
+                                    <span id="forecast-temp-step2">+2: --</span>
+                                    <span id="forecast-temp-step3">+3: --</span>
+                                </div>
+                                <div class="forecast-note" id="forecast-temp-trend">EMA trend: --</div>
+                            </div>
+                            <div class="forecast-card">
+                                <div class="forecast-label">Humidity</div>
+                                <div class="forecast-value" id="forecast-hum-value">--</div>
+                                <div class="forecast-range" id="forecast-hum-range">--</div>
+                                <div class="forecast-steps">
+                                    <span id="forecast-hum-step1">+1: --</span>
+                                    <span id="forecast-hum-step2">+2: --</span>
+                                    <span id="forecast-hum-step3">+3: --</span>
+                                </div>
+                                <div class="forecast-note" id="forecast-hum-trend">EMA trend: --</div>
+                            </div>
                         </div>
                     </div>
                     <div class="analytics-card">

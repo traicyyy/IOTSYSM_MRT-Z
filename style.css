@@ -898,6 +898,80 @@ body {
     font-size: 0.72rem;
 }
 
+/* FORECAST CARDS */
+.forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.forecast-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.forecast-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+}
+
+.forecast-value {
+    font-family: var(--font-heading);
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.forecast-range {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.forecast-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    color: var(--text-secondary);
+}
+
+.forecast-steps span {
+    background: linear-gradient(180deg, var(--bg-panel-alt), var(--bg-panel));
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 4px;
+    text-align: center;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 0 0 1px #00000010;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.forecast-note {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 980px) {
+    .forecast-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .log-val {
     font-weight: 700;
     font-size: 0.78rem;
